@@ -591,14 +591,14 @@ var testPoolSchemas sync.Map
 
 func orchestratorTestPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	dsn := os.Getenv("POSTGRES_TEST_DSN")
+	dsn := os.Getenv("POSTGRES_DSN")
 	if dsn == "" {
-		t.Skip("POSTGRES_TEST_DSN is not set; skipping Postgres integration test")
+		t.Skip("POSTGRES_DSN is not set; skipping Postgres integration test")
 	}
 	ctx := context.Background()
 	config, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
-		t.Fatalf("parse POSTGRES_TEST_DSN failed: %v", err)
+		t.Fatalf("parse POSTGRES_DSN failed: %v", err)
 	}
 	setupPool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
@@ -641,10 +641,10 @@ func testSchemaName(t *testing.T, pool *pgxpool.Pool) string {
 
 func orchestratorTestPoolInSchema(t *testing.T, schema string) *pgxpool.Pool {
 	t.Helper()
-	dsn := os.Getenv("POSTGRES_TEST_DSN")
+	dsn := os.Getenv("POSTGRES_DSN")
 	config, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
-		t.Fatalf("parse POSTGRES_TEST_DSN failed: %v", err)
+		t.Fatalf("parse POSTGRES_DSN failed: %v", err)
 	}
 	config.ConnConfig.RuntimeParams["search_path"] = schema
 	pool, err := pgxpool.NewWithConfig(context.Background(), config)

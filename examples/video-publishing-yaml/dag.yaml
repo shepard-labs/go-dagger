@@ -1,0 +1,80 @@
+name: video-publishing-yaml-example
+version: "1.0.0"
+concurrency_limit: 3
+timeout: 2m
+tasks:
+  - name: ingest-upload
+    description: Accept the uploaded source video.
+    depends_on: []
+    execute:
+      type: go
+      function: examples.video.ingest_upload
+
+  - name: probe-media
+    description: Read container, duration, and source metadata before fan-out.
+    depends_on: [ingest-upload]
+    execute:
+      type: go
+      function: examples.video.probe_media
+
+  - name: transcode-1080p
+    description: Produce the full HD streaming rendition.
+    depends_on: [probe-media]
+    timeout: 30s
+    execute:
+      type: go
+      function: examples.video.transcode_1080p
+
+  - name: transcode-720p
+    description: Produce the HD streaming rendition.
+    depends_on: [probe-media]
+    timeout: 30s
+    execute:
+      type: go
+      function: examples.video.transcode_720p
+
+  - name: generate-thumbnail
+    description: Capture a poster frame for the watch page.
+    depends_on: [probe-media]
+    timeout: 15s
+    execute:
+      type: go
+      function: examples.video.generate_thumbnail
+
+  - name: extract-captions
+    description: Extract captions from the source audio track.
+    depends_on: [probe-media]
+    timeout: 20s
+    execute:
+      type: go
+      function: examples.video.extract_captions
+
+  - name: content-safety-scan
+    description: Scan the source video before publishing.
+    depends_on: [probe-media]
+    max_attempts: 2
+    backoff: linear
+    backoff_base: 500ms
+    timeout: 20s
+    execute:
+      type: go
+      function: examples.video.content_safety_scan
+
+  - name: assemble-publishing-package
+    description: Join all generated artifacts into a publishable package.
+    depends_on:
+      - transcode-1080p
+      - transcode-720p
+      - generate-thumbnail
+      - extract-captions
+      - content-safety-scan
+    execute:
+      type: go
+      function: examples.video.assemble_publishing_package
+
+  - name: publish-video
+    description: Publish the completed video package.
+    depends_on: [assemble-publishing-package]
+    execute:
+      type: go
+      function: examples.video.publish_video

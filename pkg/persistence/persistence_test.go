@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/shepard-labs/go-dagger/internal/apperrors"
 	dagpkg "github.com/shepard-labs/go-dagger/pkg/dag"
 	"github.com/shepard-labs/go-dagger/pkg/task"
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type RunState struct{}
@@ -290,14 +290,14 @@ func assertNoUUIDDefaultsInMigration(t *testing.T) {
 
 func testPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	dsn := os.Getenv("POSTGRES_TEST_DSN")
+	dsn := os.Getenv("POSTGRES_DSN")
 	if dsn == "" {
-		t.Skip("POSTGRES_TEST_DSN is not set; skipping Postgres integration/schema test")
+		t.Skip("POSTGRES_DSN is not set; skipping Postgres integration/schema test")
 	}
 	ctx := context.Background()
 	baseConfig, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
-		t.Fatalf("parse POSTGRES_TEST_DSN failed: %v", err)
+		t.Fatalf("parse POSTGRES_DSN failed: %v", err)
 	}
 	pool, err := pgxpool.NewWithConfig(ctx, baseConfig)
 	if err != nil {

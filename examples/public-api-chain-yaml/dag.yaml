@@ -1,0 +1,55 @@
+name: public-api-chain-yaml-example
+version: "1.0.0"
+concurrency_limit: 1
+timeout: 2m
+tasks:
+  - name: lookup-current-location
+    description: Call ipapi.co to infer a country from the current public IP.
+    depends_on: []
+    timeout: 20s
+    max_attempts: 2
+    backoff: linear
+    backoff_base: 500ms
+    execute:
+      type: go
+      function: examples.api_chain.lookup_current_location
+
+  - name: fetch-country-profile
+    description: Use the previous country code to fetch country details from Rest Countries.
+    depends_on: [lookup-current-location]
+    timeout: 20s
+    max_attempts: 2
+    backoff: linear
+    backoff_base: 500ms
+    execute:
+      type: go
+      function: examples.api_chain.fetch_country_profile
+
+  - name: fetch-capital-weather
+    description: Use the previous capital coordinates to fetch current weather from Open-Meteo.
+    depends_on: [fetch-country-profile]
+    timeout: 20s
+    max_attempts: 2
+    backoff: linear
+    backoff_base: 500ms
+    execute:
+      type: go
+      function: examples.api_chain.fetch_capital_weather
+
+  - name: fetch-sunrise-sunset
+    description: Use the previous weather coordinates to fetch sunrise and sunset times.
+    depends_on: [fetch-capital-weather]
+    timeout: 20s
+    max_attempts: 2
+    backoff: linear
+    backoff_base: 500ms
+    execute:
+      type: go
+      function: examples.api_chain.fetch_sunrise_sunset
+
+  - name: summarize-api-chain
+    description: Build a final summary from all previous API outputs.
+    depends_on: [fetch-sunrise-sunset]
+    execute:
+      type: go
+      function: examples.api_chain.summarize_api_chain

@@ -1,0 +1,133 @@
+name: humanoid-drone-fusion-yaml-example
+version: "1.0.0"
+concurrency_limit: 4
+timeout: 3m
+tasks:
+  - name: initialize-mission
+    description: Load mission envelope, safety policy, and robot/drone identities.
+    depends_on: []
+    execute:
+      type: go
+      function: examples.fusion.initialize_mission
+
+  - name: ingest-humanoid-telemetry
+    description: Read humanoid proprioception, joint health, battery, and local pose.
+    depends_on: [initialize-mission]
+    timeout: 20s
+    execute:
+      type: go
+      function: examples.fusion.ingest_humanoid_telemetry
+
+  - name: ingest-drone-telemetry
+    description: Read drone flight state, battery, GNSS, and camera platform status.
+    depends_on: [initialize-mission]
+    timeout: 20s
+    execute:
+      type: go
+      function: examples.fusion.ingest_drone_telemetry
+
+  - name: ingest-environment-sensors
+    description: Read lidar, depth, thermal, audio, and weather observations.
+    depends_on: [initialize-mission]
+    timeout: 20s
+    execute:
+      type: go
+      function: examples.fusion.ingest_environment_sensors
+
+  - name: calibrate-reference-frames
+    description: Align humanoid, drone, and map coordinate frames.
+    depends_on:
+      - ingest-humanoid-telemetry
+      - ingest-drone-telemetry
+      - ingest-environment-sensors
+    execute:
+      type: go
+      function: examples.fusion.calibrate_reference_frames
+
+  - name: build-fused-world-model
+    description: Fuse telemetry and sensor observations into a shared scene graph.
+    depends_on: [calibrate-reference-frames]
+    execute:
+      type: go
+      function: examples.fusion.build_fused_world_model
+
+  - name: detect-objects-and-people
+    description: Identify people, vehicles, markers, tools, and obstacles.
+    depends_on: [build-fused-world-model]
+    timeout: 25s
+    execute:
+      type: go
+      function: examples.fusion.detect_objects_and_people
+
+  - name: assess-terrain-and-airspace
+    description: Evaluate walkable terrain, no-fly areas, wind, and clearance.
+    depends_on: [build-fused-world-model]
+    timeout: 25s
+    execute:
+      type: go
+      function: examples.fusion.assess_terrain_and_airspace
+
+  - name: estimate-system-health
+    description: Estimate battery margin, thermal state, link quality, and actuator health.
+    depends_on: [build-fused-world-model]
+    timeout: 25s
+    execute:
+      type: go
+      function: examples.fusion.estimate_system_health
+
+  - name: plan-humanoid-ground-actions
+    description: Plan navigation, inspection, manipulation, and standby tasks for the humanoid.
+    depends_on:
+      - detect-objects-and-people
+      - assess-terrain-and-airspace
+      - estimate-system-health
+    execute:
+      type: go
+      function: examples.fusion.plan_humanoid_ground_actions
+
+  - name: plan-drone-aerial-actions
+    description: Plan orbit, mapping, relay, and overwatch tasks for the drone.
+    depends_on:
+      - detect-objects-and-people
+      - assess-terrain-and-airspace
+      - estimate-system-health
+    execute:
+      type: go
+      function: examples.fusion.plan_drone_aerial_actions
+
+  - name: plan-operator-briefing
+    description: Prepare mission status, confidence, constraints, and operator questions.
+    depends_on:
+      - detect-objects-and-people
+      - assess-terrain-and-airspace
+      - estimate-system-health
+    execute:
+      type: go
+      function: examples.fusion.plan_operator_briefing
+
+  - name: run-safety-gates
+    description: Check geofence, collision, human proximity, and energy reserve constraints.
+    depends_on:
+      - plan-humanoid-ground-actions
+      - plan-drone-aerial-actions
+      - plan-operator-briefing
+    max_attempts: 2
+    backoff: linear
+    backoff_base: 500ms
+    execute:
+      type: go
+      function: examples.fusion.run_safety_gates
+
+  - name: coordinate-cross-platform-actions
+    description: Create a conflict-free timeline for humanoid, drone, and operator actions.
+    depends_on: [run-safety-gates]
+    execute:
+      type: go
+      function: examples.fusion.coordinate_cross_platform_actions
+
+  - name: publish-fusion-mission-plan
+    description: Persist and publish the final coordinated fusion plan.
+    depends_on: [coordinate-cross-platform-actions]
+    execute:
+      type: go
+      function: examples.fusion.publish_fusion_mission_plan
