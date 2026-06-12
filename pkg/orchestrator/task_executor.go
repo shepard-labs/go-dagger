@@ -52,7 +52,7 @@ func (o *Orchestrator[S]) executeTaskWithRetries(runCtx context.Context, dagName
 			if snapErr != nil {
 				return taskResult[S]{name: t.Name, status: persistence.TaskRunStatusFailed, attempt: attempt, err: snapErr}
 			}
-			if err := o.persistence.MarkTaskSuccess(runCtx, row.ID, snapshot, attempt); err != nil {
+			if err := o.persistence.MarkTaskSuccess(context.Background(), row.ID, snapshot, attempt); err != nil {
 				return taskResult[S]{name: t.Name, status: persistence.TaskRunStatusFailed, attempt: attempt, err: err}
 			}
 			return taskResult[S]{name: t.Name, state: storedState, status: persistence.TaskRunStatusSuccess, attempt: attempt}

@@ -135,6 +135,27 @@ func TestREQTASK002PassesRunStateToExecute(t *testing.T) {
 	}
 }
 
+func TestTaskSuccessPersistsWithIndependentContext(t *testing.T) {
+	store := newMemoryPersistence()
+	store.failSuccessOnRunContext = true
+	orch := newTestOrchestrator(store, Config{})
+	ctx := context.WithValue(context.Background(), persistenceContextKey{}, true)
+	row := persistence.TaskRun{ID: uuid.New(), TaskName: "task"}
+	store.tasks["task"] = row
+	store.taskTerminalCounts["task"] = &atomic.Int32{}
+	taskDef := testRunTask("task", 0, task.ExecutionModeParallel, nil, func(context.Context, *RunState) (*RunState, error) {
+		return &RunState{TargetURL: "done"}, nil
+	})
+
+	result := orch.executeTaskWithRetries(ctx, "pipeline", taskDef, row, &RunState{})
+	if result.err != nil || result.status != persistence.TaskRunStatusSuccess {
+		t.Fatalf("got status %s err %v, want success", result.status, result.err)
+	}
+	if store.tasks["task"].Status != persistence.TaskRunStatusSuccess {
+		t.Fatalf("task was not persisted successful: %s", store.tasks["task"].Status)
+	}
+}
+
 func TestREQSCHED001DoesNotReadPostgresForHealthyScheduling(t *testing.T) {
 	store := newMemoryPersistence()
 	d := testRunDAG(testRunTask("a", 0, task.ExecutionModeParallel, nil, noopExecute))
@@ -1100,16 +1121,19 @@ func errOnly[T any](_ T, err error) error {
 }
 
 type memoryPersistence struct {
-	mu                 sync.Mutex
-	tasks              map[string]persistence.TaskRun
-	taskTerminalCounts map[string]*atomic.Int32
-	runStatus          persistence.DAGRunStatus
-	runTerminalCount   atomic.Int32
-	runningAttempts    atomic.Int32
-	reads              atomic.Int32
-	afterTaskSuccess   func(string)
-	events             map[string][]persistence.TaskEvent
+	mu                      sync.Mutex
+	tasks                   map[string]persistence.TaskRun
+	taskTerminalCounts      map[string]*atomic.Int32
+	runStatus               persistence.DAGRunStatus
+	runTerminalCount        atomic.Int32
+	runningAttempts         atomic.Int32
+	reads                   atomic.Int32
+	afterTaskSuccess        func(string)
+	events                  map[string][]persistence.TaskEvent
+	failSuccessOnRunContext bool
 }
+
+type persistenceContextKey struct{}
 
 func newMemoryPersistence() *memoryPersistence {
 	return &memoryPersistence{tasks: map[string]persistence.TaskRun{}, taskTerminalCounts: map[string]*atomic.Int32{}, events: map[string][]persistence.TaskEvent{}}
@@ -1160,7 +1184,10 @@ func (m *memoryPersistence) MarkTaskRunning(_ context.Context, id uuid.UUID, att
 	return nil
 }
 
-func (m *memoryPersistence) MarkTaskSuccess(_ context.Context, id uuid.UUID, snapshot json.RawMessage, attempt int) error {
+func (m *memoryPersistence) MarkTaskSuccess(ctx context.Context, id uuid.UUID, snapshot json.RawMessage, attempt int) error {
+	if m.failSuccessOnRunContext && ctx.Value(persistenceContextKey{}) != nil {
+		return fmt.Errorf("task success used run context")
+	}
 	m.mu.Lock()
 	name, row, ok := m.taskByID(id)
 	if !ok {
