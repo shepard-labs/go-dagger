@@ -1,0 +1,65 @@
+name: llm-agent-dag-yaml-example
+version: "1.0.0"
+concurrency_limit: 3
+timeout: 3m
+tasks:
+  - name: intake
+    description: Validate the initial topic before the agent DAG starts.
+    depends_on: []
+    execute:
+      type: go
+      function: examples.llm_agent_dag_yaml.intake
+
+  - name: research-agent
+    description: Research the topic and produce a concise brief.
+    depends_on: [intake]
+    timeout: 1m
+    max_attempts: 2
+    backoff: linear
+    backoff_base: 500ms
+    execute:
+      type: go
+      function: examples.llm_agent_dag_yaml.research_agent
+
+  - name: risk-agent
+    description: Identify risks, assumptions, and operational constraints in parallel with research.
+    depends_on: [intake]
+    timeout: 1m
+    max_attempts: 2
+    backoff: linear
+    backoff_base: 500ms
+    execute:
+      type: go
+      function: examples.llm_agent_dag_yaml.risk_agent
+
+  - name: plan-agent
+    description: Join research and risk analysis into an execution plan.
+    depends_on: [research-agent, risk-agent]
+    timeout: 1m
+    max_attempts: 2
+    backoff: linear
+    backoff_base: 500ms
+    execute:
+      type: go
+      function: examples.llm_agent_dag_yaml.plan_agent
+
+  - name: critique-agent
+    description: Review the plan for gaps before final synthesis.
+    depends_on: [plan-agent]
+    timeout: 1m
+    max_attempts: 3
+    backoff: none
+    execute:
+      type: go
+      function: examples.llm_agent_dag_yaml.critique_agent
+
+  - name: final-agent
+    description: Synthesize the final answer from all previous agent outputs.
+    depends_on: [critique-agent]
+    timeout: 1m
+    max_attempts: 2
+    backoff: linear
+    backoff_base: 500ms
+    execute:
+      type: go
+      function: examples.llm_agent_dag_yaml.final_agent
