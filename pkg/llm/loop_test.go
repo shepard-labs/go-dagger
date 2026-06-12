@@ -141,6 +141,196 @@ func TestREQLOOP003_SubmitResultNotDispatched(t *testing.T) {
 	}
 }
 
+func TestREQLOOP003_TerminalPolicyReturnsResultMetadata(t *testing.T) {
+	submit := json.RawMessage(`{"ok":true}`)
+	client := &mockClient{results: []*GenerateResult{{FinishReason: FinishReasonToolCalls, Content: []Content{
+		ToolUseContent{ID: "terminal-1", Name: "finish", Input: submit},
+	}}}}
+
+	result, err := AgentLoopResultWithOptions(context.Background(), client, GenerateOptions{}, &mapDispatcher{}, AgentLoopOptions{
+		MaxTurns: 1,
+		ToolPolicies: map[string]ToolPolicy{
+			"finish": {Terminal: true},
+		},
+	})
+	if err != nil {
+		t.Fatalf("AgentLoopResultWithOptions error = %v", err)
+	}
+	if result.ToolName != "finish" || result.ToolUseID != "terminal-1" || string(result.Input) != string(submit) {
+		t.Fatalf("result = %#v, want terminal metadata", result)
+	}
+	if result.Turns != 1 {
+		t.Fatalf("turns = %d, want 1", result.Turns)
+	}
+}
+
+func TestREQLOOP003_TerminalValidationFailureRepairs(t *testing.T) {
+	client := &mockClient{results: []*GenerateResult{
+		{FinishReason: FinishReasonToolCalls, Content: []Content{ToolUseContent{ID: "bad", Name: "submit_result", Input: json.RawMessage(`{"summary":"only"}`)}}},
+		{FinishReason: FinishReasonToolCalls, Content: []Content{ToolUseContent{ID: "good", Name: "submit_result", Input: json.RawMessage(`{"summary":"ok","bullets":["detail"]}`)}}},
+	}}
+	validator := func(input json.RawMessage) error {
+		if !contains(string(input), "bullets") {
+			return errors.New("bullets is required")
+		}
+		return nil
+	}
+
+	result, err := AgentLoopResultWithOptions(context.Background(), client, GenerateOptions{}, &mapDispatcher{}, AgentLoopOptions{
+		MaxTurns:       3,
+		MaxToolRepairs: 1,
+		ToolPolicies: map[string]ToolPolicy{
+			"submit_result": {Terminal: true, Validate: validator},
+		},
+	})
+	if err != nil {
+		t.Fatalf("AgentLoopResultWithOptions error = %v", err)
+	}
+	if result.ToolUseID != "good" || result.Repairs != 1 {
+		t.Fatalf("result = %#v, want repaired terminal", result)
+	}
+	if len(result.Messages) != 3 {
+		t.Fatalf("messages len = %d, want 3", len(result.Messages))
+	}
+	repair := result.Messages[1].Content[0].(ToolResultContent)
+	if !repair.IsError || !contains(repair.Text, "invalid tool input for submit_result") || !contains(repair.Text, "bullets is required") {
+		t.Fatalf("repair result = %#v", repair)
+	}
+	if client.callCount() != 2 {
+		t.Fatalf("client calls = %d, want 2", client.callCount())
+	}
+}
+
+func TestREQLOOP003_TerminalValidationMaxRepairsExceeded(t *testing.T) {
+	client := &mockClient{results: []*GenerateResult{
+		{FinishReason: FinishReasonToolCalls, Content: []Content{ToolUseContent{ID: "1", Name: "finish", Input: json.RawMessage(`{}`)}}},
+		{FinishReason: FinishReasonToolCalls, Content: []Content{ToolUseContent{ID: "2", Name: "finish", Input: json.RawMessage(`{}`)}}},
+	}}
+
+	_, err := AgentLoopResultWithOptions(context.Background(), client, GenerateOptions{}, &mapDispatcher{}, AgentLoopOptions{
+		MaxTurns:       3,
+		MaxToolRepairs: 1,
+		ToolPolicies: map[string]ToolPolicy{
+			"finish": {Terminal: true, Validate: func(json.RawMessage) error { return errors.New("invalid") }},
+		},
+	})
+	if !errors.Is(err, ErrMaxToolRepairsExceeded) || !contains(err.Error(), "finish") || !contains(err.Error(), "invalid") {
+		t.Fatalf("error = %v, want ErrMaxToolRepairsExceeded with tool name", err)
+	}
+}
+
+func TestREQLOOP003_NormalToolValidationRepairsBeforeDispatch(t *testing.T) {
+	dispatcher := &mapDispatcher{handlers: map[string]func(context.Context, json.RawMessage) (json.RawMessage, error){
+		"search": func(context.Context, json.RawMessage) (json.RawMessage, error) {
+			return json.RawMessage(`{"ok":true}`), nil
+		},
+	}}
+	client := &mockClient{results: []*GenerateResult{
+		{FinishReason: FinishReasonToolCalls, Content: []Content{ToolUseContent{ID: "bad", Name: "search", Input: json.RawMessage(`{"query":""}`)}}},
+		{FinishReason: FinishReasonToolCalls, Content: []Content{ToolUseContent{ID: "good", Name: "search", Input: json.RawMessage(`{"query":"payments"}`)}}},
+		{FinishReason: FinishReasonStop, Content: []Content{TextContent{Text: "done"}}},
+	}}
+	validator := func(input json.RawMessage) error {
+		if contains(string(input), `"query":""`) {
+			return errors.New("query is required")
+		}
+		return nil
+	}
+
+	messages, _, err := AgentLoopWithOptions(context.Background(), client, GenerateOptions{}, dispatcher, AgentLoopOptions{
+		MaxTurns: 3,
+		ToolPolicies: map[string]ToolPolicy{
+			"search": {Validate: validator},
+		},
+	})
+	if err != nil {
+		t.Fatalf("AgentLoopWithOptions error = %v", err)
+	}
+	if dispatcher.callCount() != 1 {
+		t.Fatalf("dispatch calls = %d, want 1", dispatcher.callCount())
+	}
+	repair := messages[1].Content[0].(ToolResultContent)
+	if !repair.IsError || !contains(repair.Text, "query is required") {
+		t.Fatalf("repair result = %#v", repair)
+	}
+}
+
+func TestREQLOOP003_ValidTerminalPreventsNormalDispatch(t *testing.T) {
+	dispatcher := &mapDispatcher{handlers: map[string]func(context.Context, json.RawMessage) (json.RawMessage, error){
+		"regular": func(context.Context, json.RawMessage) (json.RawMessage, error) { return json.RawMessage(`{}`), nil },
+	}}
+	client := &mockClient{results: []*GenerateResult{{FinishReason: FinishReasonToolCalls, Content: []Content{
+		ToolUseContent{ID: "1", Name: "regular"},
+		ToolUseContent{ID: "2", Name: "finish", Input: json.RawMessage(`{"ok":true}`)},
+	}}}}
+
+	result, err := AgentLoopResultWithOptions(context.Background(), client, GenerateOptions{}, dispatcher, AgentLoopOptions{
+		MaxTurns: 1,
+		ToolPolicies: map[string]ToolPolicy{
+			"finish": {Terminal: true},
+		},
+	})
+	if err != nil {
+		t.Fatalf("AgentLoopResultWithOptions error = %v", err)
+	}
+	if result.ToolName != "finish" {
+		t.Fatalf("tool name = %q, want finish", result.ToolName)
+	}
+	if dispatcher.callCount() != 0 {
+		t.Fatalf("dispatch calls = %d, want 0", dispatcher.callCount())
+	}
+}
+
+func TestREQLOOP003_MultipleTerminalToolsReturnsFirst(t *testing.T) {
+	client := &mockClient{results: []*GenerateResult{{FinishReason: FinishReasonToolCalls, Content: []Content{
+		ToolUseContent{ID: "1", Name: "finish_a", Input: json.RawMessage(`{"a":true}`)},
+		ToolUseContent{ID: "2", Name: "finish_b", Input: json.RawMessage(`{"b":true}`)},
+	}}}}
+
+	result, err := AgentLoopResultWithOptions(context.Background(), client, GenerateOptions{}, &mapDispatcher{}, AgentLoopOptions{
+		MaxTurns: 1,
+		ToolPolicies: map[string]ToolPolicy{
+			"finish_a": {Terminal: true},
+			"finish_b": {Terminal: true},
+		},
+	})
+	if err != nil {
+		t.Fatalf("AgentLoopResultWithOptions error = %v", err)
+	}
+	if result.ToolName != "finish_a" || result.ToolUseID != "1" {
+		t.Fatalf("result = %#v, want first terminal", result)
+	}
+}
+
+func TestREQLOOP003_StopWithTerminalPolicyReturnsErrNoSubmitResult(t *testing.T) {
+	client := &mockClient{results: []*GenerateResult{{FinishReason: FinishReasonStop}}}
+	_, err := AgentLoopResultWithOptions(context.Background(), client, GenerateOptions{}, &mapDispatcher{}, AgentLoopOptions{
+		MaxTurns: 1,
+		ToolPolicies: map[string]ToolPolicy{
+			"finish": {Terminal: true},
+		},
+	})
+	if !errors.Is(err, ErrNoSubmitResult) || !contains(err.Error(), "finish") {
+		t.Fatalf("error = %v, want ErrNoSubmitResult mentioning finish", err)
+	}
+}
+
+func TestREQLOOP003_InvalidTerminalStillBoundedByMaxTurns(t *testing.T) {
+	client := &mockClient{results: []*GenerateResult{
+		{FinishReason: FinishReasonToolCalls, Content: []Content{ToolUseContent{ID: "1", Name: "finish", Input: json.RawMessage(`{}`)}}},
+		{FinishReason: FinishReasonToolCalls, Content: []Content{ToolUseContent{ID: "2", Name: "finish", Input: json.RawMessage(`{}`)}}},
+	}}
+	_, err := AgentLoopResultWithOptions(context.Background(), client, GenerateOptions{}, &mapDispatcher{}, AgentLoopOptions{
+		MaxTurns: 2,
+		ToolPolicies: map[string]ToolPolicy{
+			"finish": {Terminal: true, Validate: func(json.RawMessage) error { return errors.New("invalid") }},
+		},
+	})
+	if !errors.Is(err, ErrMaxTurnsExceeded) {
+		t.Fatalf("error = %v, want ErrMaxTurnsExceeded", err)
+	}
+}
+
 func TestREQLOOP004_MaxTurnsZeroDisablesLimit(t *testing.T) {
 	client := &mockClient{results: []*GenerateResult{
 		{FinishReason: FinishReasonToolCalls, Content: []Content{}},

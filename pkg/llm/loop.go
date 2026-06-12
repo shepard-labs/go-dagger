@@ -5,38 +5,75 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
 	"sync"
 )
 
+// ToolDispatcher executes model-requested tool calls.
 type ToolDispatcher interface {
 	Dispatch(ctx context.Context, name string, input json.RawMessage) (json.RawMessage, error)
 }
 
 var (
+	// ErrMaxTurnsExceeded indicates the agent loop hit its turn limit.
 	ErrMaxTurnsExceeded = errors.New("llm: agent loop exceeded max turns")
-	ErrNoSubmitResult   = errors.New("llm: loop ended without calling submit result tool")
+	// ErrNoSubmitResult indicates the model stopped before calling a terminal tool.
+	ErrNoSubmitResult = errors.New("llm: loop ended without calling submit result tool")
+	// ErrMaxToolRepairsExceeded indicates validation repair attempts were exhausted.
+	ErrMaxToolRepairsExceeded = errors.New("llm: agent loop exceeded max tool repairs")
 )
 
+// ToolPolicy controls validation and terminal behavior for one tool.
+type ToolPolicy struct {
+	Terminal bool
+	Validate func(input json.RawMessage) error
+}
+
+// AgentLoopResult records the final transcript and terminal tool call details.
+type AgentLoopResult struct {
+	Messages  []Message
+	ToolName  string
+	ToolUseID string
+	Input     json.RawMessage
+	Turns     int
+	Repairs   int
+}
+
+// AgentLoopOptions configures multi-turn tool use and terminal submission behavior.
 type AgentLoopOptions struct {
 	SubmitResultTool string
 	MaxTurns         int
 	TokenBudget      int
 	TokenCounter     func(messages []Message) int
+	ToolPolicies     map[string]ToolPolicy
+	MaxToolRepairs   int
 }
 
+// AgentLoop runs a tool-calling loop until the submit-result tool is called.
 func AgentLoop(ctx context.Context, client Client, opts GenerateOptions, dispatcher ToolDispatcher, submitResultTool string, maxTurns int) ([]Message, json.RawMessage, error) {
 	return AgentLoopWithOptions(ctx, client, opts, dispatcher, AgentLoopOptions{SubmitResultTool: submitResultTool, MaxTurns: maxTurns})
 }
 
+// AgentLoopWithOptions runs AgentLoop with the expanded options struct.
 func AgentLoopWithOptions(ctx context.Context, client Client, opts GenerateOptions, dispatcher ToolDispatcher, loopOpts AgentLoopOptions) ([]Message, json.RawMessage, error) {
+	result, err := AgentLoopResultWithOptions(ctx, client, opts, dispatcher, loopOpts)
+	return result.Messages, result.Input, err
+}
+
+// AgentLoopResultWithOptions returns transcript metadata in addition to terminal input.
+func AgentLoopResultWithOptions(ctx context.Context, client Client, opts GenerateOptions, dispatcher ToolDispatcher, loopOpts AgentLoopOptions) (AgentLoopResult, error) {
 	messages := cloneMessages(opts.Messages)
 	turns := 0
+	repairs := 0
+	policies := normalizeToolPolicies(loopOpts)
+	terminalTools := terminalToolNames(policies)
 	for {
 		if loopOpts.MaxTurns > 0 && turns >= loopOpts.MaxTurns {
-			return messages, nil, ErrMaxTurnsExceeded
+			return AgentLoopResult{Messages: messages, Turns: turns, Repairs: repairs}, ErrMaxTurnsExceeded
 		}
 		if err := ctx.Err(); err != nil {
-			return messages, nil, err
+			return AgentLoopResult{Messages: messages, Turns: turns, Repairs: repairs}, err
 		}
 		messages = enforceTokenBudget(messages, loopOpts.TokenBudget, loopOpts.TokenCounter)
 		request := opts
@@ -44,50 +81,144 @@ func AgentLoopWithOptions(ctx context.Context, client Client, opts GenerateOptio
 		result, err := client.Generate(ctx, request)
 		if err != nil {
 			if ctxErr := ctx.Err(); ctxErr != nil {
-				return messages, nil, ctxErr
+				return AgentLoopResult{Messages: messages, Turns: turns, Repairs: repairs}, ctxErr
 			}
-			return messages, nil, err
+			return AgentLoopResult{Messages: messages, Turns: turns, Repairs: repairs}, err
 		}
 		turns++
 		assistant := Message{Role: "assistant", Content: cloneContent(result.Content)}
 		messages = append(messages, assistant)
 
-		if loopOpts.SubmitResultTool != "" {
-			if input, ok := findSubmitResult(result.Content, loopOpts.SubmitResultTool); ok {
-				return messages, input, nil
+		toolCalls := toolUseContents(result.Content)
+		if len(toolCalls) > 0 && (result.FinishReason == FinishReasonToolCalls || hasTerminalToolCall(toolCalls, policies)) {
+			processed, err := processToolCalls(ctx, dispatcher, toolCalls, policies, loopOpts, &repairs)
+			if err != nil {
+				return AgentLoopResult{Messages: messages, Turns: turns, Repairs: repairs}, err
+			}
+			if processed.terminal != nil {
+				terminal := *processed.terminal
+				return AgentLoopResult{Messages: messages, ToolName: terminal.Name, ToolUseID: terminal.ID, Input: cloneRawMessage(terminal.Input), Turns: turns, Repairs: repairs}, nil
+			}
+			if len(processed.results) > 0 {
+				messages = append(messages, Message{Role: "user", Content: processed.results})
+				continue
 			}
 		}
 
 		switch result.FinishReason {
 		case FinishReasonToolCalls:
-			toolCalls := toolUseContents(result.Content)
-			if len(toolCalls) == 0 {
-				continue
-			}
-			messages = append(messages, Message{Role: "user", Content: dispatchToolCalls(ctx, dispatcher, toolCalls)})
+			continue
 		case FinishReasonStop:
-			if loopOpts.SubmitResultTool != "" {
-				return messages, nil, fmt.Errorf("%w: %s", ErrNoSubmitResult, loopOpts.SubmitResultTool)
+			if len(terminalTools) > 0 {
+				return AgentLoopResult{Messages: messages, Turns: turns, Repairs: repairs}, fmt.Errorf("%w: %s", ErrNoSubmitResult, strings.Join(terminalTools, ", "))
 			}
-			return messages, nil, nil
+			return AgentLoopResult{Messages: messages, Turns: turns, Repairs: repairs}, nil
 		case FinishReasonLength:
-			return messages, nil, fmt.Errorf("llm: finish reason %s", FinishReasonLength)
+			return AgentLoopResult{Messages: messages, Turns: turns, Repairs: repairs}, fmt.Errorf("llm: finish reason %s", FinishReasonLength)
 		case FinishReasonError:
-			return messages, nil, fmt.Errorf("llm: finish reason %s", FinishReasonError)
+			return AgentLoopResult{Messages: messages, Turns: turns, Repairs: repairs}, fmt.Errorf("llm: finish reason %s", FinishReasonError)
 		default:
-			return messages, nil, fmt.Errorf("llm: finish reason %s", result.FinishReason)
+			return AgentLoopResult{Messages: messages, Turns: turns, Repairs: repairs}, fmt.Errorf("llm: finish reason %s", result.FinishReason)
 		}
 	}
 }
 
-func findSubmitResult(contents []Content, name string) (json.RawMessage, bool) {
-	for _, content := range contents {
-		toolUse, ok := content.(ToolUseContent)
-		if ok && toolUse.Name == name {
-			return cloneRawMessage(toolUse.Input), true
+type processedToolCalls struct {
+	terminal *ToolUseContent
+	results  []Content
+}
+
+func normalizeToolPolicies(opts AgentLoopOptions) map[string]ToolPolicy {
+	policies := make(map[string]ToolPolicy, len(opts.ToolPolicies)+1)
+	for name, policy := range opts.ToolPolicies {
+		policies[name] = policy
+	}
+	if opts.SubmitResultTool != "" {
+		policy := policies[opts.SubmitResultTool]
+		policy.Terminal = true
+		policies[opts.SubmitResultTool] = policy
+	}
+	return policies
+}
+
+func terminalToolNames(policies map[string]ToolPolicy) []string {
+	names := make([]string, 0)
+	for name, policy := range policies {
+		if policy.Terminal {
+			names = append(names, name)
 		}
 	}
-	return nil, false
+	sort.Strings(names)
+	return names
+}
+
+func hasTerminalToolCall(toolCalls []ToolUseContent, policies map[string]ToolPolicy) bool {
+	for _, toolCall := range toolCalls {
+		if policies[toolCall.Name].Terminal {
+			return true
+		}
+	}
+	return false
+}
+
+func processToolCalls(ctx context.Context, dispatcher ToolDispatcher, toolCalls []ToolUseContent, policies map[string]ToolPolicy, opts AgentLoopOptions, repairs *int) (processedToolCalls, error) {
+	results := make([]Content, len(toolCalls))
+	validDispatchCalls := make([]indexedToolCall, 0, len(toolCalls))
+	for i, toolCall := range toolCalls {
+		policy := policies[toolCall.Name]
+		if policy.Validate != nil {
+			if err := policy.Validate(cloneRawMessage(toolCall.Input)); err != nil {
+				(*repairs)++
+				if opts.MaxToolRepairs > 0 && *repairs > opts.MaxToolRepairs {
+					return processedToolCalls{}, fmt.Errorf("%w: %s: %v", ErrMaxToolRepairsExceeded, toolCall.Name, err)
+				}
+				results[i] = ToolResultContent{ToolUseID: toolCall.ID, Text: fmt.Sprintf("invalid tool input for %s: %v", toolCall.Name, err), IsError: true}
+				continue
+			}
+		}
+		if policy.Terminal {
+			terminal := toolCall
+			terminal.Input = cloneRawMessage(toolCall.Input)
+			return processedToolCalls{terminal: &terminal}, nil
+		}
+		validDispatchCalls = append(validDispatchCalls, indexedToolCall{index: i, toolCall: toolCall})
+	}
+	if len(validDispatchCalls) > 0 {
+		dispatchResults := dispatchIndexedToolCalls(ctx, dispatcher, validDispatchCalls)
+		for i, result := range dispatchResults {
+			results[validDispatchCalls[i].index] = result
+		}
+	}
+	return processedToolCalls{results: compactContent(results)}, nil
+}
+
+type indexedToolCall struct {
+	index    int
+	toolCall ToolUseContent
+}
+
+func dispatchIndexedToolCalls(ctx context.Context, dispatcher ToolDispatcher, toolCalls []indexedToolCall) []Content {
+	results := make([]Content, len(toolCalls))
+	var wg sync.WaitGroup
+	for i, toolCall := range toolCalls {
+		wg.Add(1)
+		go func(i int, toolCall ToolUseContent) {
+			defer wg.Done()
+			results[i] = dispatchToolCall(ctx, dispatcher, toolCall)
+		}(i, toolCall.toolCall)
+	}
+	wg.Wait()
+	return results
+}
+
+func compactContent(contents []Content) []Content {
+	compacted := make([]Content, 0, len(contents))
+	for _, content := range contents {
+		if content != nil {
+			compacted = append(compacted, content)
+		}
+	}
+	return compacted
 }
 
 func toolUseContents(contents []Content) []ToolUseContent {
