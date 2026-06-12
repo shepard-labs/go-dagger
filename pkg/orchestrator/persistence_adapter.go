@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/google/uuid"
 	dagpkg "github.com/shepard-labs/go-dagger/pkg/dag"
 	"github.com/shepard-labs/go-dagger/pkg/persistence"
-	"github.com/google/uuid"
 )
 
 type runPersistence[S any] interface {

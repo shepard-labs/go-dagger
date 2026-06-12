@@ -5,9 +5,9 @@ import (
 	"errors"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/shepard-labs/go-dagger/pkg/persistence"
 	"github.com/shepard-labs/go-dagger/pkg/task"
-	"github.com/google/uuid"
 )
 
 type taskResult[S any] struct {

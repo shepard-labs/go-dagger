@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	dagpkg "github.com/shepard-labs/go-dagger/pkg/dag"
 	"github.com/shepard-labs/go-dagger/pkg/persistence"
 	"github.com/shepard-labs/go-dagger/pkg/task"
-	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 
