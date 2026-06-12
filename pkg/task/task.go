@@ -8,6 +8,7 @@ package task
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 )
 
@@ -30,6 +31,17 @@ type Tool struct {
 }
 
 type ToolRegistry map[string]Tool
+
+func (r ToolRegistry) Dispatch(ctx context.Context, name string, input json.RawMessage) (json.RawMessage, error) {
+	tool, ok := r[name]
+	if !ok {
+		return nil, fmt.Errorf("tool %q not found in registry", name)
+	}
+	if tool.Handler == nil {
+		return nil, fmt.Errorf("tool %q has nil handler", name)
+	}
+	return tool.Handler(ctx, input)
+}
 
 type ExecutionMode string
 
