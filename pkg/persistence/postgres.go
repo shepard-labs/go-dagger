@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shepard-labs/go-dagger/internal/apperrors"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/shepard-labs/go-dagger/internal/apperrors"
 )
 
 //go:embed migrations/*.sql

@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/shepard-labs/go-dagger/internal/apperrors"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/shepard-labs/go-dagger/internal/apperrors"
 )
 
 type DAGStore struct{ pool *pgxpool.Pool }
