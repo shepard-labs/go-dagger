@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 )
 
+// Cancel requests cancellation of an active run by ID.
 func (o *Orchestrator[S]) Cancel(runID uuid.UUID) error {
 	if o == nil {
 		return fmt.Errorf("%w: orchestrator is nil", ErrOrchestratorClosed)

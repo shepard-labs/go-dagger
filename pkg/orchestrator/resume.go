@@ -18,6 +18,7 @@ type resumePlan[S any] struct {
 	state         *S
 }
 
+// Resume continues a persisted running DAG from its latest successful snapshot.
 func (o *Orchestrator[S]) Resume(ctx context.Context, d *dagpkg.DAG[S], runID uuid.UUID) (run *DAGRun, err error) {
 	if o == nil {
 		return nil, fmt.Errorf("%w: orchestrator is nil", ErrOrchestratorClosed)

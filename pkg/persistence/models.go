@@ -7,48 +7,75 @@ import (
 	"github.com/google/uuid"
 )
 
+// DAGRunStatus is the persisted lifecycle state of a DAG run.
 type DAGRunStatus string
 
 const (
-	DAGRunStatusRunning   DAGRunStatus = "running"
-	DAGRunStatusSuccess   DAGRunStatus = "success"
-	DAGRunStatusFailed    DAGRunStatus = "failed"
+	// DAGRunStatusRunning means a DAG run is still active or resumable.
+	DAGRunStatusRunning DAGRunStatus = "running"
+	// DAGRunStatusSuccess means all required tasks completed successfully.
+	DAGRunStatusSuccess DAGRunStatus = "success"
+	// DAGRunStatusFailed means the DAG run ended with an error.
+	DAGRunStatusFailed DAGRunStatus = "failed"
+	// DAGRunStatusCancelled means the DAG run was cancelled before completion.
 	DAGRunStatusCancelled DAGRunStatus = "cancelled"
 )
 
+// TaskRunStatus is the persisted lifecycle state of a task run.
 type TaskRunStatus string
 
 const (
-	TaskRunStatusPending   TaskRunStatus = "pending"
-	TaskRunStatusRunning   TaskRunStatus = "running"
-	TaskRunStatusSuccess   TaskRunStatus = "success"
-	TaskRunStatusFailed    TaskRunStatus = "failed"
-	TaskRunStatusSkipped   TaskRunStatus = "skipped"
+	// TaskRunStatusPending means a task has not started yet.
+	TaskRunStatusPending TaskRunStatus = "pending"
+	// TaskRunStatusRunning means a task attempt is in progress.
+	TaskRunStatusRunning TaskRunStatus = "running"
+	// TaskRunStatusSuccess means a task completed and stored a state snapshot.
+	TaskRunStatusSuccess TaskRunStatus = "success"
+	// TaskRunStatusFailed means the latest task attempt failed.
+	TaskRunStatusFailed TaskRunStatus = "failed"
+	// TaskRunStatusSkipped means a task did not run because a dependency failed.
+	TaskRunStatusSkipped TaskRunStatus = "skipped"
+	// TaskRunStatusCancelled means a task stopped because its run was cancelled.
 	TaskRunStatusCancelled TaskRunStatus = "cancelled"
 )
 
+// TaskEventType names append-only task lifecycle events.
 type TaskEventType string
 
 const (
-	TaskEventStarted         TaskEventType = "started"
-	TaskEventSucceeded       TaskEventType = "succeeded"
-	TaskEventFailed          TaskEventType = "failed"
-	TaskEventRetried         TaskEventType = "retried"
-	TaskEventCancelled       TaskEventType = "cancelled"
-	TaskEventSkipped         TaskEventType = "skipped"
-	TaskEventRetryExhausted  TaskEventType = "retry_exhausted"
+	// TaskEventStarted records the start of an attempt.
+	TaskEventStarted TaskEventType = "started"
+	// TaskEventSucceeded records successful task completion.
+	TaskEventSucceeded TaskEventType = "succeeded"
+	// TaskEventFailed records failed task completion.
+	TaskEventFailed TaskEventType = "failed"
+	// TaskEventRetried records a retry attempt being scheduled.
+	TaskEventRetried TaskEventType = "retried"
+	// TaskEventCancelled records task cancellation.
+	TaskEventCancelled TaskEventType = "cancelled"
+	// TaskEventSkipped records dependency-based skipping.
+	TaskEventSkipped TaskEventType = "skipped"
+	// TaskEventRetryExhausted records that no retry attempts remain.
+	TaskEventRetryExhausted TaskEventType = "retry_exhausted"
+	// TaskEventAfterHookFailed records a non-terminal after-hook failure.
 	TaskEventAfterHookFailed TaskEventType = "after_hook_failed"
 )
 
+// LogLevel is the persisted severity for orchestrator logs.
 type LogLevel string
 
 const (
+	// LogLevelDebug records diagnostic logs.
 	LogLevelDebug LogLevel = "debug"
-	LogLevelInfo  LogLevel = "info"
-	LogLevelWarn  LogLevel = "warn"
+	// LogLevelInfo records informational logs.
+	LogLevelInfo LogLevel = "info"
+	// LogLevelWarn records warning logs.
+	LogLevelWarn LogLevel = "warn"
+	// LogLevelError records error logs.
 	LogLevelError LogLevel = "error"
 )
 
+// DAGRun is one persisted execution of a DAG definition.
 type DAGRun struct {
 	ID           uuid.UUID
 	DAGName      string
@@ -62,6 +89,7 @@ type DAGRun struct {
 	UpdatedAt    time.Time
 }
 
+// TaskRun is one persisted execution record for a DAG task.
 type TaskRun struct {
 	ID               uuid.UUID
 	DAGRunID         uuid.UUID
@@ -81,6 +109,7 @@ type TaskRun struct {
 	UpdatedAt        time.Time
 }
 
+// TaskEvent is an append-only lifecycle event for a task run.
 type TaskEvent struct {
 	ID           uuid.UUID
 	TaskRunID    uuid.UUID
@@ -90,6 +119,7 @@ type TaskEvent struct {
 	CreatedAt    time.Time
 }
 
+// TaskLog is a structured log line associated with a DAG run or task run.
 type TaskLog struct {
 	ID        uuid.UUID
 	DAGRunID  uuid.UUID
@@ -100,7 +130,14 @@ type TaskLog struct {
 	CreatedAt time.Time
 }
 
-func NewDAGRunID() uuid.UUID    { return uuid.New() }
-func NewTaskRunID() uuid.UUID   { return uuid.New() }
+// NewDAGRunID creates a new DAG run identifier.
+func NewDAGRunID() uuid.UUID { return uuid.New() }
+
+// NewTaskRunID creates a new task run identifier.
+func NewTaskRunID() uuid.UUID { return uuid.New() }
+
+// NewTaskEventID creates a new task event identifier.
 func NewTaskEventID() uuid.UUID { return uuid.New() }
-func NewTaskLogID() uuid.UUID   { return uuid.New() }
+
+// NewTaskLogID creates a new task log identifier.
+func NewTaskLogID() uuid.UUID { return uuid.New() }

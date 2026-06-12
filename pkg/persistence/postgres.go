@@ -17,6 +17,7 @@ import (
 //go:embed migrations/*.sql
 var migrationFS embed.FS
 
+// Config controls Postgres connection and retry behavior.
 type Config struct {
 	DSN                string
 	PoolSize           int32
@@ -27,11 +28,13 @@ type Config struct {
 	PingRetryDelay     time.Duration
 }
 
+// Postgres owns the pgx pool and persistence retry settings.
 type Postgres struct {
 	Pool   *pgxpool.Pool
 	config Config
 }
 
+// NewPostgres opens a pgx pool and verifies connectivity with retry.
 func NewPostgres(ctx context.Context, config Config) (*Postgres, error) {
 	poolConfig, err := pgxpool.ParseConfig(config.DSN)
 	if err != nil {
@@ -52,16 +55,19 @@ func NewPostgres(ctx context.Context, config Config) (*Postgres, error) {
 	return postgres, nil
 }
 
+// NewPostgresFromPool wraps an existing pgx pool.
 func NewPostgresFromPool(pool *pgxpool.Pool, config Config) *Postgres {
 	return &Postgres{Pool: pool, config: normalizeConfig(config)}
 }
 
+// Close closes the underlying pgx pool.
 func (p *Postgres) Close() {
 	if p != nil && p.Pool != nil {
 		p.Pool.Close()
 	}
 }
 
+// ApplyMigrations executes embedded SQL migrations in filename order.
 func (p *Postgres) ApplyMigrations(ctx context.Context) error {
 	entries, err := migrationFS.ReadDir("migrations")
 	if err != nil {
@@ -86,6 +92,7 @@ func (p *Postgres) ApplyMigrations(ctx context.Context) error {
 	return nil
 }
 
+// WithWriteRetry runs fn with persistence timeout and retry wrapping.
 func (p *Postgres) WithWriteRetry(ctx context.Context, operation string, fn func(context.Context) error) error {
 	return p.withWriteRetry(ctx, operation, fn)
 }
@@ -161,6 +168,7 @@ func persistenceError(operation string, err error, dsn string) error {
 	return fmt.Errorf("%w: %s: %s", apperrors.ErrPersistence, operation, message)
 }
 
+// RedactDSN removes Postgres connection strings and credentials from input.
 func RedactDSN(input string) string {
 	return redactDSN(input, input)
 }

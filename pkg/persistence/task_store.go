@@ -12,10 +12,13 @@ import (
 	dagpkg "github.com/shepard-labs/go-dagger/pkg/dag"
 )
 
+// TaskStore persists and queries task run rows.
 type TaskStore[S any] struct{ pool *pgxpool.Pool }
 
+// NewTaskStore returns a TaskStore backed by pool.
 func NewTaskStore[S any](pool *pgxpool.Pool) *TaskStore[S] { return &TaskStore[S]{pool: pool} }
 
+// CreateForDAG creates pending task rows for every task in DAG order.
 func (s *TaskStore[S]) CreateForDAG(ctx context.Context, runID uuid.UUID, d *dagpkg.DAG[S]) ([]TaskRun, error) {
 	taskRuns := make([]TaskRun, 0, len(d.TaskOrder))
 	for orderIndex, name := range d.TaskOrder {
@@ -41,6 +44,7 @@ RETURNING created_at, updated_at`, run.ID, run.DAGRunID, run.DAGVersion, run.Tas
 	return taskRuns, nil
 }
 
+// MarkRunningAttempt records the currently executing attempt number.
 func (s *TaskStore[S]) MarkRunningAttempt(ctx context.Context, taskRunID uuid.UUID, attempt int) error {
 	tag, err := s.pool.Exec(ctx, `UPDATE task_runs SET status='running', attempt=$2, started_at=NOW(), finished_at=NULL, error_message=NULL, updated_at=NOW() WHERE id=$1 AND status IN ('pending','running','failed','skipped')`, taskRunID, attempt)
 	if err != nil {
@@ -52,6 +56,7 @@ func (s *TaskStore[S]) MarkRunningAttempt(ctx context.Context, taskRunID uuid.UU
 	return nil
 }
 
+// MarkTaskSucceededWithSnapshotAndEvent stores the state snapshot and success event atomically.
 func (s *TaskStore[S]) MarkTaskSucceededWithSnapshotAndEvent(ctx context.Context, taskRunID uuid.UUID, snapshot json.RawMessage, attempt int) error {
 	if len(snapshot) == 0 {
 		snapshot = json.RawMessage(`{}`)
@@ -77,6 +82,7 @@ func (s *TaskStore[S]) MarkTaskSucceededWithSnapshotAndEvent(ctx context.Context
 	return nil
 }
 
+// MarkTerminalWithEvent stores a non-success terminal status and matching event atomically.
 func (s *TaskStore[S]) MarkTerminalWithEvent(ctx context.Context, taskRunID uuid.UUID, status TaskRunStatus, eventType TaskEventType, attempt int, errorMessage *string) error {
 	if status == TaskRunStatusSuccess {
 		return fmt.Errorf("%w: use MarkTaskSucceededWithSnapshotAndEvent for success", apperrors.ErrValidation)
@@ -102,10 +108,12 @@ func (s *TaskStore[S]) MarkTerminalWithEvent(ctx context.Context, taskRunID uuid
 	return nil
 }
 
+// Get fetches a task run by ID.
 func (s *TaskStore[S]) Get(ctx context.Context, id uuid.UUID) (*TaskRun, error) {
 	return scanTaskRun(s.pool.QueryRow(ctx, taskRunSelectSQL()+` WHERE id=$1`, id))
 }
 
+// ListByRun lists task runs for a DAG run in DAG order.
 func (s *TaskStore[S]) ListByRun(ctx context.Context, runID uuid.UUID) ([]TaskRun, error) {
 	rows, err := s.pool.Query(ctx, taskRunSelectSQL()+` WHERE dag_run_id=$1 ORDER BY order_index ASC`, runID)
 	if err != nil {
@@ -115,10 +123,12 @@ func (s *TaskStore[S]) ListByRun(ctx context.Context, runID uuid.UUID) ([]TaskRu
 	return collectTaskRuns(rows)
 }
 
+// LatestSuccessfulSnapshot returns the latest successful task row with a snapshot.
 func (s *TaskStore[S]) LatestSuccessfulSnapshot(ctx context.Context, runID uuid.UUID) (*TaskRun, error) {
 	return scanTaskRun(s.pool.QueryRow(ctx, taskRunSelectSQL()+` WHERE dag_run_id=$1 AND status='success' ORDER BY order_index DESC LIMIT 1`, runID))
 }
 
+// LoadForResume loads all task rows needed to build a resume plan.
 func (s *TaskStore[S]) LoadForResume(ctx context.Context, runID uuid.UUID) ([]TaskRun, error) {
 	return s.ListByRun(ctx, runID)
 }

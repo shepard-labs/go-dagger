@@ -8,21 +8,29 @@ import (
 	"github.com/shepard-labs/go-ai-sdk/anthropic"
 )
 
+// AnthropicAdapter adapts go-ai-sdk Anthropic models to the Client interface.
 type AnthropicAdapter struct {
 	model anthropic.LanguageModel
 }
 
+// AnthropicModelID names an Anthropic model accepted by NewAnthropicClient.
 type AnthropicModelID = anthropic.ModelID
 
 const (
+	// AnthropicModelClaudeHaiku45 is the Claude Haiku model identifier.
+	AnthropicModelClaudeHaiku45 = anthropic.ModelClaudeHaiku45
+	// AnthropicModelClaudeSonnet46 is the Claude Sonnet model identifier.
 	AnthropicModelClaudeSonnet46 = anthropic.ModelClaudeSonnet46
-	AnthropicModelClaudeOpus48   = anthropic.ModelClaudeOpus48
+	// AnthropicModelClaudeOpus48 is the Claude Opus model identifier.
+	AnthropicModelClaudeOpus48 = anthropic.ModelClaudeOpus48
 )
 
+// NewAnthropicAdapter wraps an existing Anthropic language model as a Client.
 func NewAnthropicAdapter(model anthropic.LanguageModel) Client {
 	return &AnthropicAdapter{model: model}
 }
 
+// NewAnthropicClient creates an Anthropic-backed Client from an API key and model ID.
 func NewAnthropicClient(apiKey string, modelID AnthropicModelID) (Client, error) {
 	provider := anthropic.CreateAnthropic(anthropic.ProviderSettings{APIKey: apiKey})
 	if err := provider.Err(); err != nil {
@@ -31,6 +39,7 @@ func NewAnthropicClient(apiKey string, modelID AnthropicModelID) (Client, error)
 	return NewAnthropicAdapter(provider.Model(string(modelID))), nil
 }
 
+// Generate sends a completion request through the Anthropic SDK.
 func (a *AnthropicAdapter) Generate(ctx context.Context, opts GenerateOptions) (*GenerateResult, error) {
 	sdkOpts, err := toAnthropicOptions(opts)
 	if err != nil {
@@ -43,8 +52,10 @@ func (a *AnthropicAdapter) Generate(ctx context.Context, opts GenerateOptions) (
 	return fromAnthropicResult(result), nil
 }
 
+// GeneratorFunc adapts a function to the Client interface.
 type GeneratorFunc func(ctx context.Context, opts GenerateOptions) (*GenerateResult, error)
 
+// Generate calls f with the provided options.
 func (f GeneratorFunc) Generate(ctx context.Context, opts GenerateOptions) (*GenerateResult, error) {
 	return f(ctx, opts)
 }

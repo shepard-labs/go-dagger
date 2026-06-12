@@ -9,14 +9,19 @@ import (
 	"github.com/shepard-labs/go-dagger/internal/apperrors"
 )
 
+// BackoffType selects how retry delays grow between attempts.
 type BackoffType string
 
 const (
-	BackoffNone        BackoffType = "none"
-	BackoffLinear      BackoffType = "linear"
+	// BackoffNone disables sleeping between retry attempts.
+	BackoffNone BackoffType = "none"
+	// BackoffLinear increases delay by one base interval per retry.
+	BackoffLinear BackoffType = "linear"
+	// BackoffExponential doubles delay from the base interval per retry.
 	BackoffExponential BackoffType = "exponential"
 )
 
+// RetryConfig defines task retry limits and delay behavior.
 type RetryConfig struct {
 	MaxAttempts int
 	Backoff     BackoffType
@@ -25,10 +30,12 @@ type RetryConfig struct {
 	Jitter      bool
 }
 
+// JitterSource supplies random values for retry jitter.
 type JitterSource interface {
 	Int63n(n int64) int64
 }
 
+// Normalize applies default retry values.
 func (r *RetryConfig) Normalize() {
 	if r.MaxAttempts == 0 {
 		r.MaxAttempts = 1
@@ -38,6 +45,7 @@ func (r *RetryConfig) Normalize() {
 	}
 }
 
+// Validate checks retry settings after applying defaults.
 func (r RetryConfig) Validate() error {
 	r.Normalize()
 	if r.MaxAttempts < 1 {
@@ -60,6 +68,7 @@ func (r RetryConfig) Validate() error {
 	}
 }
 
+// RetryDelay returns the wait duration before the given retry number.
 func RetryDelay(config RetryConfig, retryNumber int, rng JitterSource) time.Duration {
 	if retryNumber <= 0 {
 		return 0

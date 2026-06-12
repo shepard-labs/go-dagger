@@ -21,6 +21,7 @@ type logInserter interface {
 	Insert(context.Context, uuid.UUID, *uuid.UUID, persistence.LogLevel, string, json.RawMessage) (*persistence.TaskLog, error)
 }
 
+// LoggerFromContext returns the task-scoped logger attached to ctx, or a no-op logger.
 func LoggerFromContext(ctx context.Context) *zap.Logger {
 	logger, _ := ctx.Value(loggerContextKey{}).(*zap.Logger)
 	if logger == nil {
@@ -236,6 +237,7 @@ func redactValue(value any) any {
 	return decoded
 }
 
+// RedactLogValue removes known secret values before logs reach sinks.
 func RedactLogValue(input string) string {
 	redacted := input
 	if strings.Contains(input, "postgres://") || strings.Contains(input, "postgresql://") {

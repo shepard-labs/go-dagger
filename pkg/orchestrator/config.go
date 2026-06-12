@@ -1,3 +1,4 @@
+// Package orchestrator validates DAGs and coordinates persisted task execution.
 package orchestrator
 
 import (
@@ -31,6 +32,7 @@ type GlobalInputs[G any] struct {
 	Value G
 }
 
+// Config controls persistence, scheduling, lifecycle, and logging behavior.
 type Config struct {
 	PostgresDSN        string
 	PostgresPoolSize   int32
@@ -42,8 +44,10 @@ type Config struct {
 	Logger             *zap.Logger
 }
 
+// DAGRun is the public run record returned by the orchestrator.
 type DAGRun = persistence.DAGRun
 
+// Orchestrator validates, runs, resumes, cancels, and queries DAG executions.
 type Orchestrator[S any] struct {
 	postgres     *persistence.Postgres
 	persistence  runPersistence[S]
@@ -70,6 +74,7 @@ type activeRun struct {
 	err      error
 }
 
+// NewOrchestrator opens Postgres-backed persistence and returns an orchestrator.
 func NewOrchestrator[S any](ctx context.Context, config Config) (*Orchestrator[S], error) {
 	config = normalizeOrchestratorConfig(config)
 	postgres, err := persistence.NewPostgres(ctx, persistence.Config{
@@ -84,6 +89,7 @@ func NewOrchestrator[S any](ctx context.Context, config Config) (*Orchestrator[S
 	return newOrchestratorWithPersistence(config, postgres, newPostgresPersistence[S](postgres)), nil
 }
 
+// Close cancels active runs, waits up to the grace period, and closes persistence.
 func (o *Orchestrator[S]) Close() error {
 	if o == nil {
 		return nil
@@ -135,6 +141,7 @@ func isCloseFailure(err error) bool {
 	return err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, ErrRunTerminal)
 }
 
+// DryRun validates a DAG without creating a persisted run.
 func (o *Orchestrator[S]) DryRun(d *dagpkg.DAG[S]) error {
 	runtimeDAG := cloneDAG(d)
 	return runtimeDAG.Validate()

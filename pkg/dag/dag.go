@@ -16,6 +16,7 @@ import (
 	"github.com/shepard-labs/go-dagger/pkg/task"
 )
 
+// DAG describes a validated task graph and its scheduling metadata.
 type DAG[S any] struct {
 	Name             string
 	Version          string
@@ -27,6 +28,7 @@ type DAG[S any] struct {
 	InDegree         map[string]int
 }
 
+// Validate checks the DAG definition and materializes graph indexes used at runtime.
 func (d *DAG[S]) Validate() error {
 	if d == nil {
 		return fmt.Errorf("%w: dag is nil", apperrors.ErrValidation)
@@ -103,6 +105,7 @@ func (d *DAG[S]) Validate() error {
 	return nil
 }
 
+// TopologicalSort returns a deterministic dependency-safe task order.
 func (d *DAG[S]) TopologicalSort() ([]string, error) {
 	if d == nil {
 		return nil, fmt.Errorf("%w: dag is nil", apperrors.ErrValidation)

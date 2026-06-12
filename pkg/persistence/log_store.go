@@ -9,10 +9,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// LogStore persists and queries structured log rows.
 type LogStore struct{ pool *pgxpool.Pool }
 
+// NewLogStore returns a LogStore backed by pool.
 func NewLogStore(pool *pgxpool.Pool) *LogStore { return &LogStore{pool: pool} }
 
+// Insert writes one structured log row.
 func (s *LogStore) Insert(ctx context.Context, dagRunID uuid.UUID, taskRunID *uuid.UUID, level LogLevel, message string, fields json.RawMessage) (*TaskLog, error) {
 	if len(fields) == 0 {
 		fields = nil
@@ -25,6 +28,7 @@ func (s *LogStore) Insert(ctx context.Context, dagRunID uuid.UUID, taskRunID *uu
 	return log, nil
 }
 
+// ListByDAGRun returns all logs for a DAG run in creation order.
 func (s *LogStore) ListByDAGRun(ctx context.Context, dagRunID uuid.UUID) ([]TaskLog, error) {
 	rows, err := s.pool.Query(ctx, `SELECT id, dag_run_id, task_run_id, level, message, fields, created_at FROM task_logs WHERE dag_run_id=$1 ORDER BY created_at ASC, id ASC`, dagRunID)
 	if err != nil {
@@ -34,6 +38,7 @@ func (s *LogStore) ListByDAGRun(ctx context.Context, dagRunID uuid.UUID) ([]Task
 	return collectTaskLogs(rows)
 }
 
+// ListByTaskRun returns logs for a task run in creation order.
 func (s *LogStore) ListByTaskRun(ctx context.Context, taskRunID uuid.UUID) ([]TaskLog, error) {
 	rows, err := s.pool.Query(ctx, `SELECT id, dag_run_id, task_run_id, level, message, fields, created_at FROM task_logs WHERE task_run_id=$1 ORDER BY created_at ASC, id ASC`, taskRunID)
 	if err != nil {

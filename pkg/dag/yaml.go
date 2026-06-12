@@ -44,6 +44,7 @@ type executeYAML struct {
 	Function string `yaml:"function"`
 }
 
+// ParseYAML converts a strict YAML DAG definition into a validated DAG.
 func ParseYAML[S any](data []byte, functions task.FunctionRegistry[S], hooks task.HookRegistry[S], tools task.ToolRegistry) (*DAG[S], error) {
 	var node yaml.Node
 	decoder := yaml.NewDecoder(bytes.NewReader(data))
@@ -99,6 +100,7 @@ func ParseYAML[S any](data []byte, functions task.FunctionRegistry[S], hooks tas
 	return d, nil
 }
 
+// SerializeYAML renders a DAG definition back to the public YAML format.
 func SerializeYAML[S any](d *DAG[S]) ([]byte, error) {
 	if d == nil {
 		return nil, fmt.Errorf("%w: dag is nil", apperrors.ErrValidation)
