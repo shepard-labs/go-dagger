@@ -6,7 +6,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/joho/godotenv v1.5.1
-	github.com/shepard-labs/go-ai-sdk v0.0.0-20260612055641-aa7b62536c19
+	github.com/shepard-labs/go-ai-sdk v1.0.0
 	go.uber.org/zap v1.28.0
 	gopkg.in/yaml.v3 v3.0.1
 )

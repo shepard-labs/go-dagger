@@ -2,7 +2,7 @@
 
 An LLM agent workflow built programmatically in Go (no YAML). The DAG is
 constructed in [`main.go`](./main.go) by populating a `*dag.DAG[RunState]`
-with `task.Task` values. Each agent task calls `pkg/llm.AgentLoopWithOptions`
+with `task.Task` values. Each agent task calls `github.com/shepard-labs/go-ai-sdk/llm.AgentLoopWithOptions`
 and writes its structured result back into typed run state.
 
 ## Pipeline shape

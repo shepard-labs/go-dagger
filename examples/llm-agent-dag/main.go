@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	"github.com/shepard-labs/go-ai-sdk/llm"
 	"github.com/shepard-labs/go-dagger/pkg/dag"
-	"github.com/shepard-labs/go-dagger/pkg/llm"
 	"github.com/shepard-labs/go-dagger/pkg/orchestrator"
 	"github.com/shepard-labs/go-dagger/pkg/task"
 )

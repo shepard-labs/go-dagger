@@ -21,10 +21,8 @@ github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZb
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/rogpeppe/go-internal v1.15.0 h1:D0RCU5rMAp+SpgkiNdrjfJ+LX4J1M32V2NeCY7EJ6hc=
 github.com/rogpeppe/go-internal v1.15.0/go.mod h1:DrUVZyrJU+txYW5/1kwtXQSMFio52ZOxX7yM1VHvnxs=
-github.com/shepard-labs/go-ai-sdk v0.0.0-20260612031133-1f940d16df54 h1:nHOHaw8w2UH4dgX/ICQ1ggWRtIc4BdEJtcL/jzrZPd4=
-github.com/shepard-labs/go-ai-sdk v0.0.0-20260612031133-1f940d16df54/go.mod h1:WluaMNh1aamwTrSRFY/B/RZw+ts7X2zKO+Ry4VF57ps=
-github.com/shepard-labs/go-ai-sdk v0.0.0-20260612055641-aa7b62536c19 h1:+/2BfSbH0PgvYZz0agCcoVzZWw7mqFCZMIY+gLdBiOo=
-github.com/shepard-labs/go-ai-sdk v0.0.0-20260612055641-aa7b62536c19/go.mod h1:WluaMNh1aamwTrSRFY/B/RZw+ts7X2zKO+Ry4VF57ps=
+github.com/shepard-labs/go-ai-sdk v1.0.0 h1:rt0Ah0Gm+Mr7G+iqgC8unvw0kjejUelMDIXYR5AQB1w=
+github.com/shepard-labs/go-ai-sdk v1.0.0/go.mod h1:WluaMNh1aamwTrSRFY/B/RZw+ts7X2zKO+Ry4VF57ps=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UVUgZn+9EI=
 github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
