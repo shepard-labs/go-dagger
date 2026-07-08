@@ -183,7 +183,7 @@ func TestSchemaDagRunsHasGlobalInputsJSONBDefault(t *testing.T) {
 	pool := testPool(t)
 	assertColumn(t, pool, "dag_runs", "global_inputs", "jsonb", "NO")
 	var defaultValue *string
-	if err := pool.QueryRow(context.Background(), `SELECT column_default FROM information_schema.columns WHERE table_name='dag_runs' AND column_name='global_inputs'`).Scan(&defaultValue); err != nil {
+	if err := pool.QueryRow(context.Background(), `SELECT column_default FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='dag_runs' AND column_name='global_inputs'`).Scan(&defaultValue); err != nil {
 		t.Fatalf("query default failed: %v", err)
 	}
 	if defaultValue == nil || !strings.Contains(*defaultValue, "'{}'::jsonb") {
