@@ -19,7 +19,11 @@ var migrationFS embed.FS
 
 // Config controls Postgres connection and retry behavior.
 type Config struct {
-	DSN                string
+	DSN string
+	// Schema sets the connection's search_path so unqualified table names
+	// (dag_runs, task_runs, task_events, task_logs) resolve against this
+	// schema. Empty leaves the server default (typically "public").
+	Schema             string
 	PoolSize           int32
 	PersistenceTimeout time.Duration
 	WriteRetries       int
@@ -39,6 +43,9 @@ func NewPostgres(ctx context.Context, config Config) (*Postgres, error) {
 	poolConfig, err := pgxpool.ParseConfig(config.DSN)
 	if err != nil {
 		return nil, persistenceError("parse postgres config", err, config.DSN)
+	}
+	if config.Schema != "" {
+		poolConfig.ConnConfig.RuntimeParams["search_path"] = config.Schema
 	}
 	if config.PoolSize > 0 {
 		poolConfig.MaxConns = config.PoolSize

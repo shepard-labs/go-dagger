@@ -34,7 +34,11 @@ type GlobalInputs[G any] struct {
 
 // Config controls persistence, scheduling, lifecycle, and logging behavior.
 type Config struct {
-	PostgresDSN        string
+	PostgresDSN string
+	// PostgresSchema sets the connection's search_path so the persistence
+	// layer's unqualified table names resolve against this schema. Empty
+	// leaves the server default (typically "public").
+	PostgresSchema     string
 	PostgresPoolSize   int32
 	PersistenceTimeout time.Duration
 	PersistenceRetries int
@@ -79,6 +83,7 @@ func NewOrchestrator[S any](ctx context.Context, config Config) (*Orchestrator[S
 	config = normalizeOrchestratorConfig(config)
 	postgres, err := persistence.NewPostgres(ctx, persistence.Config{
 		DSN:                config.PostgresDSN,
+		Schema:             config.PostgresSchema,
 		PoolSize:           config.PostgresPoolSize,
 		PersistenceTimeout: config.PersistenceTimeout,
 		WriteRetries:       config.PersistenceRetries,
