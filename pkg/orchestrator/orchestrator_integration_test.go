@@ -509,7 +509,7 @@ func TestREQLOG002ZapFanOutWritesStdoutAndPostgres(t *testing.T) {
 	runID, rows := seedResumeRun(t, pool, "pipeline", "", RunState{}, []resumeSeedTask{{Name: "a", Status: persistence.TaskRunStatusPending}})
 	taskRunID := rows["a"]
 	var stdout bytes.Buffer
-	logger := newFanOutLogger(nil, persistence.NewLogStore(pool), &stdout, &bytes.Buffer{}).With(zap.String("dag_run_id", runID.String()), zap.String("dag_name", "pipeline"), zap.String("task_run_id", taskRunID.String()), zap.String("task_name", "a"), zap.Int("attempt", 1))
+	logger := newFanOutLogger(nil, persistence.NewLogStore(pool, ""), &stdout, &bytes.Buffer{}).With(zap.String("dag_run_id", runID.String()), zap.String("dag_name", "pipeline"), zap.String("task_run_id", taskRunID.String()), zap.String("task_name", "a"), zap.Int("attempt", 1))
 	logger.Info("hello")
 	if !findSubstring(stdout.String(), "hello") {
 		t.Fatalf("stdout=%s", stdout.String())
@@ -526,7 +526,7 @@ func TestREQLOG002ZapFanOutWritesStdoutAndPostgres(t *testing.T) {
 func TestREQLOG002DAGLevelLogHasNullTaskRunID(t *testing.T) {
 	pool := orchestratorTestPool(t)
 	runID, _ := seedResumeRun(t, pool, "pipeline", "", RunState{}, nil)
-	newFanOutLogger(nil, persistence.NewLogStore(pool), &bytes.Buffer{}, &bytes.Buffer{}).With(zap.String("dag_run_id", runID.String()), zap.String("dag_name", "pipeline")).Info("dag")
+	newFanOutLogger(nil, persistence.NewLogStore(pool, ""), &bytes.Buffer{}, &bytes.Buffer{}).With(zap.String("dag_run_id", runID.String()), zap.String("dag_name", "pipeline")).Info("dag")
 	logs, err := postgresTestOrchestrator(pool).GetDAGRunLogs(context.Background(), runID)
 	if err != nil {
 		t.Fatalf("GetDAGRunLogs failed: %v", err)
@@ -540,7 +540,7 @@ func TestREQLOG002PostgresLogWriteFailureDoesNotPropagate(t *testing.T) {
 	pool := orchestratorTestPool(t)
 	runID := uuid.New()
 	var stderr bytes.Buffer
-	logger := newFanOutLogger(nil, persistence.NewLogStore(pool), &bytes.Buffer{}, &stderr).With(zap.String("dag_run_id", runID.String()), zap.String("dag_name", "pipeline"))
+	logger := newFanOutLogger(nil, persistence.NewLogStore(pool, ""), &bytes.Buffer{}, &stderr).With(zap.String("dag_run_id", runID.String()), zap.String("dag_name", "pipeline"))
 	logger.Info("missing foreign key")
 	if !findSubstring(stderr.String(), "log persistence failure") {
 		t.Fatalf("stderr=%s", stderr.String())

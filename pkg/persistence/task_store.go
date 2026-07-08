@@ -13,10 +13,26 @@ import (
 )
 
 // TaskStore persists and queries task run rows.
-type TaskStore[S any] struct{ pool *pgxpool.Pool }
+type TaskStore[S any] struct {
+	pool   *pgxpool.Pool
+	schema string
+}
 
 // NewTaskStore returns a TaskStore backed by pool.
-func NewTaskStore[S any](pool *pgxpool.Pool) *TaskStore[S] { return &TaskStore[S]{pool: pool} }
+// Schema qualifies every table reference (e.g. "spiderreach.task_runs");
+// empty leaves table names unqualified (resolved via the connection's
+// search_path, typically "public").
+func NewTaskStore[S any](pool *pgxpool.Pool, schema string) *TaskStore[S] {
+	return &TaskStore[S]{pool: pool, schema: schema}
+}
+
+// q prefixes the table name with the configured schema, if any.
+func (s *TaskStore[S]) q(table string) string {
+	if s.schema == "" {
+		return table
+	}
+	return s.schema + "." + table
+}
 
 // CreateForDAG creates pending task rows for every task in DAG order.
 func (s *TaskStore[S]) CreateForDAG(ctx context.Context, runID uuid.UUID, d *dagpkg.DAG[S]) ([]TaskRun, error) {
@@ -32,7 +48,7 @@ func (s *TaskStore[S]) CreateForDAG(ctx context.Context, runID uuid.UUID, d *dag
 			run.DAGVersion = &d.Version
 		}
 		err = s.pool.QueryRow(ctx, `
-INSERT INTO task_runs (id, dag_run_id, dag_version, task_name, status, attempt, description, tags, priority, order_index, created_at, updated_at)
+INSERT INTO `+s.q("task_runs")+` (id, dag_run_id, dag_version, task_name, status, attempt, description, tags, priority, order_index, created_at, updated_at)
 VALUES ($1,$2,$3,$4,$5,0,$6,$7,$8,$9,NOW(),NOW())
 RETURNING created_at, updated_at`, run.ID, run.DAGRunID, run.DAGVersion, run.TaskName, run.Status, run.Description, run.Tags, run.Priority, run.OrderIndex).
 			Scan(&run.CreatedAt, &run.UpdatedAt)
@@ -46,7 +62,7 @@ RETURNING created_at, updated_at`, run.ID, run.DAGRunID, run.DAGVersion, run.Tas
 
 // MarkRunningAttempt records the currently executing attempt number.
 func (s *TaskStore[S]) MarkRunningAttempt(ctx context.Context, taskRunID uuid.UUID, attempt int) error {
-	tag, err := s.pool.Exec(ctx, `UPDATE task_runs SET status='running', attempt=$2, started_at=NOW(), finished_at=NULL, error_message=NULL, updated_at=NOW() WHERE id=$1 AND status IN ('pending','running','failed','skipped')`, taskRunID, attempt)
+	tag, err := s.pool.Exec(ctx, `UPDATE `+s.q("task_runs")+` SET status='running', attempt=$2, started_at=NOW(), finished_at=NULL, error_message=NULL, updated_at=NOW() WHERE id=$1 AND status IN ('pending','running','failed','skipped')`, taskRunID, attempt)
 	if err != nil {
 		return persistenceError("mark task running", err, "")
 	}
@@ -66,14 +82,14 @@ func (s *TaskStore[S]) MarkTaskSucceededWithSnapshotAndEvent(ctx context.Context
 		return persistenceError("begin task success transaction", err, "")
 	}
 	defer tx.Rollback(ctx)
-	tag, err := tx.Exec(ctx, `UPDATE task_runs SET status='success', run_state_snapshot=$2, finished_at=NOW(), updated_at=NOW(), error_message=NULL WHERE id=$1 AND status IN ('pending','running','failed','skipped')`, taskRunID, snapshot)
+	tag, err := tx.Exec(ctx, `UPDATE `+s.q("task_runs")+` SET status='success', run_state_snapshot=$2, finished_at=NOW(), updated_at=NOW(), error_message=NULL WHERE id=$1 AND status IN ('pending','running','failed','skipped')`, taskRunID, snapshot)
 	if err != nil {
 		return persistenceError("mark task success", err, "")
 	}
 	if tag.RowsAffected() == 0 {
 		return fmt.Errorf("%w: task run %s cannot be marked success", apperrors.ErrRunTerminal, taskRunID)
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO task_events (id, task_run_id, event_type, attempt, created_at) VALUES ($1,$2,$3,$4,NOW())`, NewTaskEventID(), taskRunID, TaskEventSucceeded, attempt); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO `+s.q("task_events")+` (id, task_run_id, event_type, attempt, created_at) VALUES ($1,$2,$3,$4,NOW())`, NewTaskEventID(), taskRunID, TaskEventSucceeded, attempt); err != nil {
 		return persistenceError("insert task success event", err, "")
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -92,14 +108,14 @@ func (s *TaskStore[S]) MarkTerminalWithEvent(ctx context.Context, taskRunID uuid
 		return persistenceError("begin task terminal transaction", err, "")
 	}
 	defer tx.Rollback(ctx)
-	tag, err := tx.Exec(ctx, `UPDATE task_runs SET status=$2, finished_at=NOW(), updated_at=NOW(), error_message=$3, run_state_snapshot=NULL WHERE id=$1 AND status IN ('pending','running','failed','skipped')`, taskRunID, status, errorMessage)
+	tag, err := tx.Exec(ctx, `UPDATE `+s.q("task_runs")+` SET status=$2, finished_at=NOW(), updated_at=NOW(), error_message=$3, run_state_snapshot=NULL WHERE id=$1 AND status IN ('pending','running','failed','skipped')`, taskRunID, status, errorMessage)
 	if err != nil {
 		return persistenceError("mark task terminal", err, "")
 	}
 	if tag.RowsAffected() == 0 {
 		return fmt.Errorf("%w: task run %s cannot be marked terminal", apperrors.ErrRunTerminal, taskRunID)
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO task_events (id, task_run_id, event_type, attempt, error_message, created_at) VALUES ($1,$2,$3,$4,$5,NOW())`, NewTaskEventID(), taskRunID, eventType, attempt, errorMessage); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO `+s.q("task_events")+` (id, task_run_id, event_type, attempt, error_message, created_at) VALUES ($1,$2,$3,$4,$5,NOW())`, NewTaskEventID(), taskRunID, eventType, attempt, errorMessage); err != nil {
 		return persistenceError("insert task terminal event", err, "")
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -110,12 +126,12 @@ func (s *TaskStore[S]) MarkTerminalWithEvent(ctx context.Context, taskRunID uuid
 
 // Get fetches a task run by ID.
 func (s *TaskStore[S]) Get(ctx context.Context, id uuid.UUID) (*TaskRun, error) {
-	return scanTaskRun(s.pool.QueryRow(ctx, taskRunSelectSQL()+` WHERE id=$1`, id))
+	return scanTaskRun(s.pool.QueryRow(ctx, s.taskRunSelectSQL()+` WHERE id=$1`, id))
 }
 
 // ListByRun lists task runs for a DAG run in DAG order.
 func (s *TaskStore[S]) ListByRun(ctx context.Context, runID uuid.UUID) ([]TaskRun, error) {
-	rows, err := s.pool.Query(ctx, taskRunSelectSQL()+` WHERE dag_run_id=$1 ORDER BY order_index ASC`, runID)
+	rows, err := s.pool.Query(ctx, s.taskRunSelectSQL()+` WHERE dag_run_id=$1 ORDER BY order_index ASC`, runID)
 	if err != nil {
 		return nil, persistenceError("list task runs", err, "")
 	}
@@ -125,7 +141,7 @@ func (s *TaskStore[S]) ListByRun(ctx context.Context, runID uuid.UUID) ([]TaskRu
 
 // LatestSuccessfulSnapshot returns the latest successful task row with a snapshot.
 func (s *TaskStore[S]) LatestSuccessfulSnapshot(ctx context.Context, runID uuid.UUID) (*TaskRun, error) {
-	return scanTaskRun(s.pool.QueryRow(ctx, taskRunSelectSQL()+` WHERE dag_run_id=$1 AND status='success' ORDER BY order_index DESC LIMIT 1`, runID))
+	return scanTaskRun(s.pool.QueryRow(ctx, s.taskRunSelectSQL()+` WHERE dag_run_id=$1 AND status='success' ORDER BY order_index DESC LIMIT 1`, runID))
 }
 
 // LoadForResume loads all task rows needed to build a resume plan.
@@ -133,8 +149,8 @@ func (s *TaskStore[S]) LoadForResume(ctx context.Context, runID uuid.UUID) ([]Ta
 	return s.ListByRun(ctx, runID)
 }
 
-func taskRunSelectSQL() string {
-	return `SELECT id, dag_run_id, dag_version, task_name, status, attempt, started_at, finished_at, error_message, description, tags, priority, order_index, run_state_snapshot, created_at, updated_at FROM task_runs`
+func (s *TaskStore[S]) taskRunSelectSQL() string {
+	return `SELECT id, dag_run_id, dag_version, task_name, status, attempt, started_at, finished_at, error_message, description, tags, priority, order_index, run_state_snapshot, created_at, updated_at FROM ` + s.q("task_runs")
 }
 
 func scanTaskRun(row pgx.Row) (*TaskRun, error) {

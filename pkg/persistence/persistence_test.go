@@ -93,7 +93,7 @@ func TestREQPERSIST002TaskTerminalSnapshotEventAtomicSuccess(t *testing.T) {
 	ctx := context.Background()
 	run, taskRun := seedRunAndTask(t, pool)
 	snapshot := json.RawMessage(`{"target_url":"https://example.com","input_keywords":["go"]}`)
-	store := NewTaskStore[RunState](pool)
+	store := NewTaskStore[RunState](pool, "")
 	if err := store.MarkTaskSucceededWithSnapshotAndEvent(ctx, taskRun.ID, snapshot, 1); err != nil {
 		t.Fatalf("MarkTaskSucceededWithSnapshotAndEvent failed: %v", err)
 	}
@@ -104,7 +104,7 @@ func TestREQPERSIST002TaskTerminalSnapshotEventAtomicSuccess(t *testing.T) {
 	if updated.Status != TaskRunStatusSuccess || len(updated.RunStateSnapshot) == 0 {
 		t.Fatalf("success snapshot was not persisted atomically: %#v", updated)
 	}
-	events, err := NewEventStore(pool).ListByTaskRun(ctx, taskRun.ID)
+	events, err := NewEventStore(pool, "").ListByTaskRun(ctx, taskRun.ID)
 	if err != nil {
 		t.Fatalf("ListByTaskRun failed: %v", err)
 	}
@@ -127,7 +127,7 @@ func TestREQPERSIST002InjectedFailureLeavesNoPartialTerminalState(t *testing.T) 
 	if err := tx.Rollback(ctx); err != nil {
 		t.Fatalf("Rollback failed: %v", err)
 	}
-	updated, err := NewTaskStore[RunState](pool).Get(ctx, taskRun.ID)
+	updated, err := NewTaskStore[RunState](pool, "").Get(ctx, taskRun.ID)
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
@@ -139,7 +139,7 @@ func TestREQPERSIST002InjectedFailureLeavesNoPartialTerminalState(t *testing.T) 
 func TestREQDAG002ListTaskRunsOrdersByOrderIndex(t *testing.T) {
 	pool := testPool(t)
 	ctx := context.Background()
-	dagStore := NewDAGStore(pool)
+	dagStore := NewDAGStore(pool, "")
 	run, err := dagStore.CreateRunning(ctx, "pipeline", nil, nil)
 	if err != nil {
 		t.Fatalf("CreateRunning failed: %v", err)
@@ -148,10 +148,10 @@ func TestREQDAG002ListTaskRunsOrdersByOrderIndex(t *testing.T) {
 	for _, name := range d.TaskOrder {
 		d.Tasks[name] = &task.Task[RunState]{Name: name, Tags: map[string]string{}, Execute: func(context.Context, *RunState) (*RunState, error) { return &RunState{}, nil }}
 	}
-	if _, err := NewTaskStore[RunState](pool).CreateForDAG(ctx, run.ID, d); err != nil {
+	if _, err := NewTaskStore[RunState](pool, "").CreateForDAG(ctx, run.ID, d); err != nil {
 		t.Fatalf("CreateForDAG failed: %v", err)
 	}
-	rows, err := NewTaskStore[RunState](pool).ListByRun(ctx, run.ID)
+	rows, err := NewTaskStore[RunState](pool, "").ListByRun(ctx, run.ID)
 	if err != nil {
 		t.Fatalf("ListByRun failed: %v", err)
 	}
@@ -245,10 +245,10 @@ func TestSchemaCascadeDeleteRemovesTaskRunsEventsAndLogs(t *testing.T) {
 	pool := testPool(t)
 	ctx := context.Background()
 	run, taskRun := seedRunAndTask(t, pool)
-	if _, err := NewEventStore(pool).Insert(ctx, taskRun.ID, TaskEventStarted, 1, nil); err != nil {
+	if _, err := NewEventStore(pool, "").Insert(ctx, taskRun.ID, TaskEventStarted, 1, nil); err != nil {
 		t.Fatalf("insert event failed: %v", err)
 	}
-	if _, err := NewLogStore(pool).Insert(ctx, run.ID, &taskRun.ID, LogLevelInfo, "message", nil); err != nil {
+	if _, err := NewLogStore(pool, "").Insert(ctx, run.ID, &taskRun.ID, LogLevelInfo, "message", nil); err != nil {
 		t.Fatalf("insert log failed: %v", err)
 	}
 	if _, err := pool.Exec(ctx, `DELETE FROM dag_runs WHERE id=$1`, run.ID); err != nil {
@@ -322,12 +322,12 @@ func testPool(t *testing.T) *pgxpool.Pool {
 func seedRunAndTask(t *testing.T, pool *pgxpool.Pool) (*DAGRun, *TaskRun) {
 	t.Helper()
 	ctx := context.Background()
-	run, err := NewDAGStore(pool).CreateRunning(ctx, "pipeline", nil, nil)
+	run, err := NewDAGStore(pool, "").CreateRunning(ctx, "pipeline", nil, nil)
 	if err != nil {
 		t.Fatalf("CreateRunning failed: %v", err)
 	}
 	d := &dagpkg.DAG[RunState]{Name: "pipeline", Tasks: map[string]*task.Task[RunState]{"task": {Name: "task", Tags: map[string]string{}, Execute: func(context.Context, *RunState) (*RunState, error) { return &RunState{}, nil }}}, TaskOrder: []string{"task"}}
-	taskRuns, err := NewTaskStore[RunState](pool).CreateForDAG(ctx, run.ID, d)
+	taskRuns, err := NewTaskStore[RunState](pool, "").CreateForDAG(ctx, run.ID, d)
 	if err != nil {
 		t.Fatalf("CreateForDAG failed: %v", err)
 	}

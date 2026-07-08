@@ -74,7 +74,12 @@ func (p *Postgres) Close() {
 	}
 }
 
+// Schema returns the configured schema name, or "" if unset.
+func (p *Postgres) Schema() string { return p.config.Schema }
+
 // ApplyMigrations executes embedded SQL migrations in filename order.
+// When Schema is set, table and index DDL is qualified with the schema
+// name so the tables are created in that schema.
 func (p *Postgres) ApplyMigrations(ctx context.Context) error {
 	entries, err := migrationFS.ReadDir("migrations")
 	if err != nil {
@@ -92,7 +97,11 @@ func (p *Postgres) ApplyMigrations(ctx context.Context) error {
 		if err != nil {
 			return persistenceError("read migration "+name, err, "")
 		}
-		if _, err := p.Pool.Exec(ctx, string(sqlBytes)); err != nil {
+		sqlText := string(sqlBytes)
+		if p.config.Schema != "" {
+			sqlText = "SET search_path TO " + p.config.Schema + ";\n" + sqlText
+		}
+		if _, err := p.Pool.Exec(ctx, sqlText); err != nil {
 			return persistenceError("apply migration "+name, err, "")
 		}
 	}

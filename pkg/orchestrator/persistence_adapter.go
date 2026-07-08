@@ -31,11 +31,15 @@ type postgresPersistence[S any] struct {
 }
 
 func newPostgresPersistence[S any](postgres *persistence.Postgres) *postgresPersistence[S] {
+	schema := ""
+	if postgres != nil {
+		schema = postgres.Schema()
+	}
 	return &postgresPersistence[S]{
 		postgres: postgres,
-		dags:     persistence.NewDAGStore(postgres.Pool),
-		tasks:    persistence.NewTaskStore[S](postgres.Pool),
-		events:   persistence.NewEventStore(postgres.Pool),
+		dags:     persistence.NewDAGStore(postgres.Pool, schema),
+		tasks:    persistence.NewTaskStore[S](postgres.Pool, schema),
+		events:   persistence.NewEventStore(postgres.Pool, schema),
 	}
 }
 

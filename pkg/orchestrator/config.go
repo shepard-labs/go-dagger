@@ -507,15 +507,19 @@ func normalizeOrchestratorConfig(config Config) Config {
 
 func newOrchestratorWithPersistence[S any](config Config, postgres *persistence.Postgres, store runPersistence[S]) *Orchestrator[S] {
 	config = normalizeOrchestratorConfig(config)
+	schema := ""
+	if postgres != nil {
+		schema = postgres.Schema()
+	}
 	if postgres != nil && postgres.Pool != nil {
-		config.Logger = newFanOutLogger(config.Logger, persistence.NewLogStore(postgres.Pool), nil, nil)
+		config.Logger = newFanOutLogger(config.Logger, persistence.NewLogStore(postgres.Pool, schema), nil, nil)
 	}
 	o := &Orchestrator[S]{postgres: postgres, persistence: store, logger: config.Logger, config: config, activeRuns: map[uuid.UUID]*activeRun{}}
 	if postgres != nil && postgres.Pool != nil {
-		o.dagQueries = persistence.NewDAGStore(postgres.Pool)
-		o.taskQueries = persistence.NewTaskStore[S](postgres.Pool)
-		o.eventQueries = persistence.NewEventStore(postgres.Pool)
-		o.logQueries = persistence.NewLogStore(postgres.Pool)
+		o.dagQueries = persistence.NewDAGStore(postgres.Pool, schema)
+		o.taskQueries = persistence.NewTaskStore[S](postgres.Pool, schema)
+		o.eventQueries = persistence.NewEventStore(postgres.Pool, schema)
+		o.logQueries = persistence.NewLogStore(postgres.Pool, schema)
 	}
 	return o
 }
