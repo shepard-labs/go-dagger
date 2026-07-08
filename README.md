@@ -2,9 +2,10 @@
 
 [![CI](https://github.com/shepard-labs/go-dagger/actions/workflows/ci.yml/badge.svg)](https://github.com/shepard-labs/go-dagger/actions/workflows/ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/shepard-labs/go-dagger.svg)](https://pkg.go.dev/github.com/shepard-labs/go-dagger)
-[![Go Report Card](https://goreportcard.com/badge/github.com/shepard-labs/go-dagger)](https://goreportcard.com/report/github.com/shepard-labs/go-dagger)
+[![golangci-lint](https://github.com/shepard-labs/go-dagger/actions/workflows/ci.yml/badge.svg)](https://github.com/shepard-labs/go-dagger/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/shepard-labs/go-dagger?sort=semver)](https://github.com/shepard-labs/go-dagger/releases)
 [![License](https://img.shields.io/github/license/shepard-labs/go-dagger)](LICENSE)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/shepard-labs/go-dagger)
 
 A durable, Postgres-backed DAG orchestrator for Go. Define typed task graphs in
 code or YAML, run them with persisted state, retries, cancellation, and resumability,
