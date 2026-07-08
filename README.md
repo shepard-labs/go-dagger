@@ -1,6 +1,5 @@
 # go-dagger
 
-[![CI](https://github.com/shepard-labs/go-dagger/actions/workflows/ci.yml/badge.svg)](https://github.com/shepard-labs/go-dagger/actions/workflows/ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/shepard-labs/go-dagger.svg)](https://pkg.go.dev/github.com/shepard-labs/go-dagger)
 [![golangci-lint](https://github.com/shepard-labs/go-dagger/actions/workflows/ci.yml/badge.svg)](https://github.com/shepard-labs/go-dagger/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/shepard-labs/go-dagger?sort=semver)](https://github.com/shepard-labs/go-dagger/releases)
