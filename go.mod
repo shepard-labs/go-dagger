@@ -1,12 +1,12 @@
 module github.com/shepard-labs/go-dagger
 
-go 1.25.0
+go 1.25.8
 
 require (
 	github.com/google/uuid v1.6.0
-	github.com/jackc/pgx/v5 v5.10.0
+	github.com/jackc/pgx/v5 v5.11.0
 	github.com/joho/godotenv v1.5.1
-	github.com/shepard-labs/go-ai-sdk v1.0.0
+	github.com/shepard-labs/go-ai-sdk v1.0.14
 	go.uber.org/zap v1.28.0
 	gopkg.in/yaml.v3 v3.0.1
 )
