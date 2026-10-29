@@ -13,6 +13,7 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/shepard-labs/go-ai-sdk/llm"
+	"github.com/shepard-labs/go-ai-sdk/llm/adapters"
 	"github.com/shepard-labs/go-dagger/pkg/dag"
 	"github.com/shepard-labs/go-dagger/pkg/orchestrator"
 	"github.com/shepard-labs/go-dagger/pkg/task"
@@ -21,11 +22,11 @@ import (
 const submitResultToolName = "submit_result"
 
 const (
-	defaultResearchModel  = llm.AnthropicModelClaudeSonnet46
-	defaultRiskModel      = llm.AnthropicModelClaudeSonnet46
-	defaultPlanningModel  = llm.AnthropicModelClaudeSonnet46
-	defaultCritiqueModel  = llm.AnthropicModelClaudeSonnet46
-	defaultSynthesisModel = llm.AnthropicModelClaudeSonnet46
+	defaultResearchModel  = adapters.AnthropicModelClaudeSonnet46
+	defaultRiskModel      = adapters.AnthropicModelClaudeSonnet46
+	defaultPlanningModel  = adapters.AnthropicModelClaudeSonnet46
+	defaultCritiqueModel  = adapters.AnthropicModelClaudeSonnet46
+	defaultSynthesisModel = adapters.AnthropicModelClaudeSonnet46
 )
 
 type RunState struct {
@@ -343,18 +344,18 @@ func newAgentClients(apiKey string) (agentClients, error) {
 
 type anthropicClientFactory struct {
 	apiKey  string
-	clients map[llm.AnthropicModelID]llm.Client
+	clients map[adapters.AnthropicModelID]llm.Client
 }
 
 func newAnthropicClientFactory(apiKey string) *anthropicClientFactory {
-	return &anthropicClientFactory{apiKey: apiKey, clients: map[llm.AnthropicModelID]llm.Client{}}
+	return &anthropicClientFactory{apiKey: apiKey, clients: map[adapters.AnthropicModelID]llm.Client{}}
 }
 
-func (f *anthropicClientFactory) Client(modelID llm.AnthropicModelID) (llm.Client, error) {
+func (f *anthropicClientFactory) Client(modelID adapters.AnthropicModelID) (llm.Client, error) {
 	if client, ok := f.clients[modelID]; ok {
 		return client, nil
 	}
-	client, err := llm.NewAnthropicClient(f.apiKey, modelID)
+	client, err := adapters.NewAnthropicClient(f.apiKey, modelID)
 	if err != nil {
 		return nil, err
 	}
@@ -362,9 +363,9 @@ func (f *anthropicClientFactory) Client(modelID llm.AnthropicModelID) (llm.Clien
 	return client, nil
 }
 
-func modelFromEnv(name string, fallback llm.AnthropicModelID) llm.AnthropicModelID {
+func modelFromEnv(name string, fallback adapters.AnthropicModelID) adapters.AnthropicModelID {
 	if value := strings.TrimSpace(os.Getenv(name)); value != "" {
-		return llm.AnthropicModelID(value)
+		return adapters.AnthropicModelID(value)
 	}
 	return fallback
 }

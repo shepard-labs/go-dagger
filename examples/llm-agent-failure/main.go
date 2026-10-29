@@ -10,6 +10,7 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/shepard-labs/go-ai-sdk/llm"
+	"github.com/shepard-labs/go-ai-sdk/llm/adapters"
 	"github.com/shepard-labs/go-dagger/pkg/dag"
 	"github.com/shepard-labs/go-dagger/pkg/orchestrator"
 	"github.com/shepard-labs/go-dagger/pkg/task"
@@ -73,16 +74,16 @@ func run(ctx context.Context) error {
 }
 
 func agentDAG() *dag.DAG[RunState] {
-	successClient := llm.GeneratorFunc(func(_ context.Context, _ llm.GenerateOptions) (*llm.GenerateResult, error) {
+	successClient := adapters.GeneratorFunc(func(_ context.Context, _ llm.GenerateOptions) (*llm.GenerateResult, error) {
 		return &llm.GenerateResult{
-			FinishReason: llm.FinishReasonStop,
+			FinishReason: llm.FinishReason{Unified: llm.FinishReasonStop},
 			Content: []llm.Content{llm.TextContent{
 				Text: `{"summary":"mock result from agent"}`,
 			}},
 		}, nil
 	})
 
-	failingClient := llm.GeneratorFunc(func(_ context.Context, _ llm.GenerateOptions) (*llm.GenerateResult, error) {
+	failingClient := adapters.GeneratorFunc(func(_ context.Context, _ llm.GenerateOptions) (*llm.GenerateResult, error) {
 		return nil, fmt.Errorf("API error 500: upstream LLM service unavailable")
 	})
 

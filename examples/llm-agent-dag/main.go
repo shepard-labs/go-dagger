@@ -11,6 +11,7 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/shepard-labs/go-ai-sdk/llm"
+	"github.com/shepard-labs/go-ai-sdk/llm/adapters"
 	"github.com/shepard-labs/go-dagger/pkg/dag"
 	"github.com/shepard-labs/go-dagger/pkg/orchestrator"
 	"github.com/shepard-labs/go-dagger/pkg/task"
@@ -98,19 +99,19 @@ func run(ctx context.Context) error {
 
 func newAgentClients(apiKey string) (agentClients, error) {
 	factory := newAnthropicClientFactory(apiKey)
-	research, err := factory.Client(modelFromEnv("RESEARCH_AGENT_MODEL", llm.AnthropicModelClaudeSonnet46))
+	research, err := factory.Client(modelFromEnv("RESEARCH_AGENT_MODEL", adapters.AnthropicModelClaudeSonnet46))
 	if err != nil {
 		return agentClients{}, err
 	}
-	planning, err := factory.Client(modelFromEnv("PLANNING_AGENT_MODEL", llm.AnthropicModelClaudeSonnet46))
+	planning, err := factory.Client(modelFromEnv("PLANNING_AGENT_MODEL", adapters.AnthropicModelClaudeSonnet46))
 	if err != nil {
 		return agentClients{}, err
 	}
-	critique, err := factory.Client(modelFromEnv("CRITIQUE_AGENT_MODEL", llm.AnthropicModelClaudeSonnet46))
+	critique, err := factory.Client(modelFromEnv("CRITIQUE_AGENT_MODEL", adapters.AnthropicModelClaudeSonnet46))
 	if err != nil {
 		return agentClients{}, err
 	}
-	synthesis, err := factory.Client(modelFromEnv("SYNTHESIS_AGENT_MODEL", llm.AnthropicModelClaudeSonnet46))
+	synthesis, err := factory.Client(modelFromEnv("SYNTHESIS_AGENT_MODEL", adapters.AnthropicModelClaudeSonnet46))
 	if err != nil {
 		return agentClients{}, err
 	}
@@ -119,18 +120,18 @@ func newAgentClients(apiKey string) (agentClients, error) {
 
 type anthropicClientFactory struct {
 	apiKey  string
-	clients map[llm.AnthropicModelID]llm.Client
+	clients map[adapters.AnthropicModelID]llm.Client
 }
 
 func newAnthropicClientFactory(apiKey string) *anthropicClientFactory {
-	return &anthropicClientFactory{apiKey: apiKey, clients: map[llm.AnthropicModelID]llm.Client{}}
+	return &anthropicClientFactory{apiKey: apiKey, clients: map[adapters.AnthropicModelID]llm.Client{}}
 }
 
-func (f *anthropicClientFactory) Client(modelID llm.AnthropicModelID) (llm.Client, error) {
+func (f *anthropicClientFactory) Client(modelID adapters.AnthropicModelID) (llm.Client, error) {
 	if client, ok := f.clients[modelID]; ok {
 		return client, nil
 	}
-	client, err := llm.NewAnthropicClient(f.apiKey, modelID)
+	client, err := adapters.NewAnthropicClient(f.apiKey, modelID)
 	if err != nil {
 		return nil, err
 	}
@@ -138,9 +139,9 @@ func (f *anthropicClientFactory) Client(modelID llm.AnthropicModelID) (llm.Clien
 	return client, nil
 }
 
-func modelFromEnv(name string, fallback llm.AnthropicModelID) llm.AnthropicModelID {
+func modelFromEnv(name string, fallback adapters.AnthropicModelID) adapters.AnthropicModelID {
 	if value := strings.TrimSpace(os.Getenv(name)); value != "" {
-		return llm.AnthropicModelID(value)
+		return adapters.AnthropicModelID(value)
 	}
 	return fallback
 }

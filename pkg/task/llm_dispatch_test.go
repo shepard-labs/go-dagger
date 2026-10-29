@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/shepard-labs/go-ai-sdk/llm"
+	"github.com/shepard-labs/go-ai-sdk/llm/adapters"
 )
 
 func TestToolRegistryImplementsLLMToolDispatcher(t *testing.T) {
@@ -14,15 +15,15 @@ func TestToolRegistryImplementsLLMToolDispatcher(t *testing.T) {
 
 func TestToolRegistryAgentLoopSurfacesMissingToolAsError(t *testing.T) {
 	var call int
-	client := llm.GeneratorFunc(func(context.Context, llm.GenerateOptions) (*llm.GenerateResult, error) {
+	client := adapters.GeneratorFunc(func(context.Context, llm.GenerateOptions) (*llm.GenerateResult, error) {
 		call++
 		if call == 1 {
 			return &llm.GenerateResult{
-				FinishReason: llm.FinishReasonToolCalls,
+				FinishReason: llm.FinishReason{Unified: llm.FinishReasonToolCalls},
 				Content:      []llm.Content{llm.ToolUseContent{ID: "1", Name: "missing"}},
 			}, nil
 		}
-		return &llm.GenerateResult{FinishReason: llm.FinishReasonStop}, nil
+		return &llm.GenerateResult{FinishReason: llm.FinishReason{Unified: llm.FinishReasonStop}}, nil
 	})
 	messages, _, err := llm.AgentLoop(context.Background(), client, llm.GenerateOptions{}, ToolRegistry{}, "", 3)
 	if err != nil {
