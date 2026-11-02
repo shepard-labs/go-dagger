@@ -6,10 +6,6 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 10
-    assignees:
-      - "divydeep-shepardlabs"
-    reviewers:
-      - "divydeep-shepardlabs"
     commit-message:
       prefix: "chore(deps)"
     groups:
@@ -24,10 +20,6 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
-    assignees:
-      - "divydeep-shepardlabs"
-    reviewers:
-      - "divydeep-shepardlabs"
     commit-message:
       prefix: "chore(deps)"
     groups:
